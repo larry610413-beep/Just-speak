@@ -426,48 +426,8 @@ export default function App() {
 
       {/* Voice Control Area */}
       <footer className="p-4 md:p-6 bg-white border-t border-gray-200 shadow-2xl rounded-t-3xl">
-        <div className="max-w-3xl mx-auto flex flex-col items-center gap-4">
-          <div className="flex flex-col items-center gap-2">
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onMouseDown={startListening}
-              onMouseUp={stopListening}
-              onMouseLeave={isListening ? stopListening : undefined}
-              onTouchStart={(e) => { 
-                // Don't preventDefault here as it might block permission prompts
-                startListening(); 
-              }}
-              onTouchEnd={(e) => { 
-                e.preventDefault(); 
-                stopListening(); 
-              }}
-              disabled={isLoading || isSpeaking}
-              className={`w-14 h-14 rounded-full flex items-center justify-center shadow-xl transition-all relative select-none touch-none ${
-                isListening 
-                  ? 'bg-red-500 text-white' 
-                  : (isLoading || isSpeaking) ? 'bg-gray-100 text-gray-300 cursor-not-allowed' : 'bg-indigo-600 text-white hover:bg-indigo-700'
-              }`}
-            >
-              {isListening && (
-                <motion.div 
-                  animate={{ scale: [1, 1.5, 1], opacity: [0.5, 0, 0.5] }}
-                  transition={{ repeat: Infinity, duration: 1.5 }}
-                  className="absolute inset-0 bg-red-500 rounded-full"
-                />
-              )}
-              <div className="relative z-10">
-                {isListening ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
-              </div>
-            </motion.button>
-            
-            <div className="text-center h-4">
-              <p className={`text-[10px] font-bold uppercase tracking-wider transition-colors ${isListening ? 'text-red-500' : 'text-gray-500'}`}>
-                {isListening ? 'RELEASE TO SEND' : isSpeaking ? 'AI SPEAKING' : isLoading ? 'THINKING' : ''}
-              </p>
-            </div>
-          </div>
-
+        <div className="max-w-3xl mx-auto flex flex-col items-center gap-6">
+          {/* Text Input Row */}
           <form 
             onSubmit={(e) => { e.preventDefault(); handleSend(input); }}
             className="w-full flex gap-2"
@@ -488,6 +448,47 @@ export default function App() {
               <Send className="w-4 h-4" />
             </button>
           </form>
+
+          {/* Voice Button Row (Moved Down) */}
+          <div className="flex flex-col items-center gap-2 pb-2">
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onMouseDown={startListening}
+              onMouseUp={stopListening}
+              onMouseLeave={isListening ? stopListening : undefined}
+              onTouchStart={(e) => { 
+                startListening(); 
+              }}
+              onTouchEnd={(e) => { 
+                e.preventDefault(); 
+                stopListening(); 
+              }}
+              disabled={isLoading || isSpeaking}
+              className={`w-16 h-16 rounded-full flex items-center justify-center shadow-xl transition-all relative select-none touch-none ${
+                isListening 
+                  ? 'bg-red-500 text-white' 
+                  : (isLoading || isSpeaking) ? 'bg-gray-100 text-gray-300 cursor-not-allowed' : 'bg-indigo-600 text-white hover:bg-indigo-700'
+              }`}
+            >
+              {isListening && (
+                <motion.div 
+                  animate={{ scale: [1, 1.5, 1], opacity: [0.5, 0, 0.5] }}
+                  transition={{ repeat: Infinity, duration: 1.5 }}
+                  className="absolute inset-0 bg-red-500 rounded-full"
+                />
+              )}
+              <div className="relative z-10">
+                {isListening ? <MicOff className="w-7 h-7" /> : <Mic className="w-7 h-7" />}
+              </div>
+            </motion.button>
+            
+            <div className="text-center h-4">
+              <p className={`text-[10px] font-bold uppercase tracking-wider transition-colors ${isListening ? 'text-red-500' : 'text-gray-500'}`}>
+                {isListening ? 'RELEASE TO SEND' : isSpeaking ? 'AI SPEAKING' : isLoading ? 'THINKING' : ''}
+              </p>
+            </div>
+          </div>
         </div>
       </footer>
     </div>
