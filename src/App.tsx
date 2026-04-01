@@ -35,6 +35,7 @@ export default function App() {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [hasError, setHasError] = useState<string | null>(null);
+  const [isIframe, setIsIframe] = useState(false);
   const transcriptRef = useRef('');
   const isProcessingRef = useRef(false);
   const audioQueueRef = useRef<string[]>([]);
@@ -43,6 +44,7 @@ export default function App() {
 
   // Load history from local storage on mount
   useEffect(() => {
+    setIsIframe(window.self !== window.top);
     const savedHistory = localStorage.getItem(STORAGE_KEY);
     if (savedHistory) {
       try {
@@ -93,13 +95,22 @@ export default function App() {
     if (!text.trim()) return;
     
     return new Promise<void>((resolve) => {
+      // Safety check for SpeechSynthesis support
+      if (!window.speechSynthesis) {
+        console.warn('SpeechSynthesis not supported');
+        resolve();
+        return;
+      }
+
       // Use browser's native SpeechSynthesis (FREE and INSTANT)
       const utterance = new SpeechSynthesisUtterance(text);
       
       // Try to find a natural English voice
-      const voices = window.speechSynthesis.getVoices();
-      const englishVoice = voices.find(v => v.lang.startsWith('en') && v.name.includes('Google')) || 
-                           voices.find(v => v.lang.startsWith('en'));
+      const voices = window.speechSynthesis.getVoices() || [];
+      const englishVoice = voices.length > 0 
+        ? (voices.find(v => v.lang.startsWith('en') && v.name.includes('Google')) || 
+           voices.find(v => v.lang.startsWith('en')))
+        : null;
       
       if (englishVoice) {
         utterance.voice = englishVoice;
@@ -142,37 +153,73 @@ export default function App() {
     processAudioQueue();
   };
 
-  const startListening = () => {
+  const toggleListening = () => {
     if (!recognition) {
-      setHasError('您的瀏覽器不支援語音辨識 (Speech Recognition)。請使用 Chrome 或 Safari。');
+      setHasError('您的瀏覽器不支援語音辨識。請使用 Chrome 或 Safari。');
       return;
     }
+    
+    if (isListening) {
+      stopListening();
+    } else {
+      startListening();
+    }
+  };
+
+  const startListening = () => {
     if (isLoading || isSpeaking) return;
     
+    // Add haptic feedback for mobile
+    if ('vibrate' in navigator) {
+      navigator.vibrate(50);
+    }
+
     transcriptRef.current = '';
     setHasError(null);
     try {
-      recognition.start();
-      setIsListening(true);
-    } catch (e) {
+      if (recognition) {
+        recognition.start();
+        setIsListening(true);
+      }
+    } catch (e: any) {
       console.error('Recognition start error:', e);
+      setIsListening(false);
+      
+      // Handle different error types
+      if (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError' || (e.message && e.message.includes('denied'))) {
+        setHasError('麥克風存取被拒絕。請確保您已允許瀏覽器使用麥克風。');
+      } else if (e.name === 'InvalidStateError') {
+        // Recognition is already running, try to stop it first
+        try { recognition.stop(); } catch (err) {}
+        setHasError('語音辨識狀態異常，請稍候再試。');
+      } else {
+        setHasError(`語音辨識啟動失敗: ${e.message || '未知錯誤'}`);
+      }
     }
   };
 
   const stopListening = () => {
     if (recognition && isListening) {
       setIsListening(false);
+      
+      // Add haptic feedback for mobile
+      if ('vibrate' in navigator) {
+        navigator.vibrate([30, 30]);
+      }
+
       try {
         recognition.stop();
       } catch (e) {}
       
-      // Send the accumulated transcript on release
-      if (transcriptRef.current.trim()) {
-        const textToSend = transcriptRef.current;
-        transcriptRef.current = ''; // CRITICAL: Clear immediately to prevent duplicate sends
-        setInput(''); // Clear input field as well
-        handleSend(textToSend);
-      }
+      // Small delay to ensure onresult has fired
+      setTimeout(() => {
+        if (transcriptRef.current.trim()) {
+          const textToSend = transcriptRef.current;
+          transcriptRef.current = ''; 
+          setInput(''); 
+          handleSend(textToSend);
+        }
+      }, 300);
     }
   };
 
@@ -192,12 +239,19 @@ export default function App() {
     recognition.onerror = (event: any) => {
       if (event.error === 'aborted') return;
       console.error('Speech recognition error:', event.error);
+      setIsListening(false);
+      
       if (event.error === 'not-allowed') {
-        setHasError('麥克風存取被拒絕。請在瀏覽器網址列點擊鎖頭圖示並允許麥克風權限。');
+        setHasError('麥克風存取被拒絕。這通常是因為瀏覽器權限設定或在預覽視窗中被阻擋。');
+      } else if (event.error === 'network') {
+        setHasError('網路連線問題，請檢查您的網路。');
+      } else if (event.error === 'no-speech') {
+        // Ignore no-speech errors to avoid annoying the user
+      } else if (event.error === 'service-not-allowed') {
+        setHasError('此瀏覽器不允許在此網頁使用語音辨識服務。');
       } else {
         setHasError(`語音辨識錯誤: ${event.error}`);
       }
-      setIsListening(false);
     };
 
     recognition.onend = () => {
@@ -261,11 +315,33 @@ export default function App() {
       }
     } catch (error: any) {
       console.error('Error sending message:', error);
-      const errorMessage = error?.message || 'Unknown error';
+      let errorMessage = 'AI 連線暫時中斷，請稍後再試。';
+      
+      try {
+        const errorText = error?.message || '';
+        if (errorText.includes('{')) {
+          const jsonStart = errorText.indexOf('{');
+          const jsonStr = errorText.substring(jsonStart);
+          const parsed = JSON.parse(jsonStr);
+          errorMessage = parsed?.error?.message || parsed?.message || 'API 連線錯誤';
+        } else {
+          errorMessage = errorText;
+        }
+      } catch (e) {
+        errorMessage = '無法解析 AI 回應，請檢查網路連線。';
+      }
+
+      // Translate common API errors to friendly Chinese
+      if (errorMessage.toLowerCase().includes('api key not valid')) {
+        errorMessage = '系統正在初始化 AI 金鑰，請重新整理網頁或稍候再試。';
+      } else if (errorMessage.toLowerCase().includes('quota')) {
+        errorMessage = '目前使用人數較多，請稍等一分鐘後再試。';
+      }
+
       setMessages((prev) =>
         prev.map((msg) =>
           msg.id === assistantMessageId
-            ? { ...msg, content: `Error: ${errorMessage}. Please check your connection or API key.` }
+            ? { ...msg, content: `【系統提示】：${errorMessage}` }
             : msg
         )
       );
@@ -344,10 +420,38 @@ export default function App() {
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            className="bg-red-50 border-b border-red-100 px-6 py-3 flex items-center gap-3 text-red-700 text-sm overflow-hidden"
+            className="bg-red-50 border-b border-red-100 px-6 py-4 flex flex-col gap-3 overflow-hidden"
           >
-            <VolumeX className="w-4 h-4 flex-shrink-0" />
-            <p>{hasError}</p>
+            <div className="flex items-start gap-3 text-red-700 text-sm">
+              <VolumeX className="w-5 h-5 flex-shrink-0 mt-0.5" />
+              <div className="space-y-2">
+                <p className="font-bold">{hasError}</p>
+                <div className="space-y-1 text-xs opacity-80">
+                  <p>解決方法：</p>
+                  <ul className="list-disc list-inside space-y-1">
+                    <li>點擊網址列左側的「鎖頭」或「設定」圖示，將「麥克風」設為「允許」。</li>
+                    <li>如果您是在 AI Studio 預覽視窗中，請點擊下方的「在新分頁開啟」按鈕。</li>
+                    <li>確保您的手機系統設定中也已允許瀏覽器存取麥克風。</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button 
+                onClick={() => setHasError(null)}
+                className="px-3 py-1.5 bg-white border border-red-200 text-red-600 text-xs font-bold rounded-lg hover:bg-red-50 transition-all"
+              >
+                關閉提示
+              </button>
+              {isIframe && (
+                <button 
+                  onClick={() => window.open(window.location.href, '_blank')}
+                  className="px-3 py-1.5 bg-red-600 text-white text-xs font-bold rounded-lg hover:bg-red-700 transition-all shadow-sm"
+                >
+                  在新分頁開啟 (解決權限問題)
+                </button>
+              )}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -449,21 +553,12 @@ export default function App() {
             </button>
           </form>
 
-          {/* Voice Button Row (Moved Down) */}
+          {/* Voice Button Row (Toggle Mode) */}
           <div className="flex flex-col items-center gap-2 pb-2">
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              onMouseDown={startListening}
-              onMouseUp={stopListening}
-              onMouseLeave={isListening ? stopListening : undefined}
-              onTouchStart={(e) => { 
-                startListening(); 
-              }}
-              onTouchEnd={(e) => { 
-                e.preventDefault(); 
-                stopListening(); 
-              }}
+              onClick={toggleListening}
               disabled={isLoading || isSpeaking}
               className={`w-16 h-16 rounded-full flex items-center justify-center shadow-xl transition-all relative select-none touch-none ${
                 isListening 
@@ -484,8 +579,8 @@ export default function App() {
             </motion.button>
             
             <div className="text-center h-4">
-              <p className={`text-[10px] font-bold uppercase tracking-wider transition-colors ${isListening ? 'text-red-500' : 'text-gray-500'}`}>
-                {isListening ? 'RELEASE TO SEND' : isSpeaking ? 'AI SPEAKING' : isLoading ? 'THINKING' : ''}
+              <p className={`text-[10px] font-bold uppercase tracking-wider transition-colors ${isListening ? 'text-red-500 animate-pulse' : 'text-gray-500'}`}>
+                {isListening ? 'TAP TO STOP' : isSpeaking ? 'AI SPEAKING' : isLoading ? 'THINKING' : 'TAP TO SPEAK'}
               </p>
             </div>
           </div>

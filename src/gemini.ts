@@ -1,6 +1,21 @@
 import { GoogleGenAI, Content, Modality } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+let apiKey = (window as any).GEMINI_API_KEY || process.env.GEMINI_API_KEY || (import.meta as any).env?.VITE_GEMINI_API_KEY || '';
+
+// If key is still missing, try to fetch it from the server
+if (!apiKey) {
+  fetch('/api/config')
+    .then(res => res.json())
+    .then(config => {
+      if (config.apiKey) {
+        apiKey = config.apiKey;
+        (window as any).GEMINI_API_KEY = apiKey;
+      }
+    })
+    .catch(err => console.error('Failed to fetch API config:', err));
+}
+
+const ai = new GoogleGenAI({ apiKey: apiKey || 'dummy-key' });
 
 let chatInstance: any = null;
 
