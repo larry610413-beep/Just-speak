@@ -1,0 +1,5 @@
+{
+  "name": "English Speaking Trainer",
+  "description": "An AI-powered English speaking trainer that helps you practice natural conversation with voice.",
+  "requestFramePermissions": ["microphone"]
+}
