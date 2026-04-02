@@ -172,7 +172,7 @@ export default function App() {
     setApiKey(key);
     setHasError(null);
     setIsKeySaved(true);
-    setTimeout(() => setIsKeySaved(false), 2000); // Reset after 2s
+    // Persistent green state, no timeout reset
   };
 
   const toggleListening = () => {
@@ -241,15 +241,13 @@ export default function App() {
         recognition.stop();
       } catch (e) {}
       
-      // Small delay to ensure onresult has fired its final chunk
-      setTimeout(() => {
-        const finalTranscript = transcriptRef.current.trim();
-        if (finalTranscript) {
-          handleSend(finalTranscript);
-          transcriptRef.current = ''; 
-          // Do NOT setInput here to keep input box clean as requested
-        }
-      }, 500);
+      // Capture whatever we have immediately
+      const finalTranscript = transcriptRef.current.trim();
+      if (finalTranscript) {
+        handleSend(finalTranscript);
+        transcriptRef.current = ''; 
+        // Do NOT setInput here intentionally
+      }
     }
   };
 
@@ -257,19 +255,19 @@ export default function App() {
     if (!recognition) return;
 
     recognition.onresult = (event: any) => {
-      let interimTranscript = '';
+      let currentTranscript = '';
       for (let i = event.resultIndex; i < event.results.length; ++i) {
-        const transcript = event.results[i][0].transcript;
+        const result = event.results[i][0].transcript;
         if (event.results[i].isFinal) {
-          transcriptRef.current = transcript;
+          transcriptRef.current = result;
         } else {
-          interimTranscript += transcript;
+          currentTranscript += result;
         }
       }
       
-      const finalVal = transcriptRef.current || interimTranscript;
-      if (finalVal.trim()) {
-        transcriptRef.current = finalVal;
+      const latestValue = transcriptRef.current || currentTranscript;
+      if (latestValue.trim()) {
+        transcriptRef.current = latestValue;
       }
     };
 
@@ -341,7 +339,7 @@ export default function App() {
         parts: [{ text: m.content }]
       }));
 
-      const stream = sendMessageStream(userMessage.content, history, mode);
+      const stream = sendMessageStream(userMessage.content, history, mode, apiKey);
       
       for await (const chunk of stream) {
         fullResponse += chunk;
@@ -411,11 +409,15 @@ export default function App() {
   return (
     <div className="flex flex-col h-screen bg-slate-950 text-slate-100 font-sans selection:bg-indigo-500/30">
       {/* Header */}
-      <header className="flex items-center justify-between px-6 py-4 bg-slate-900 border-b border-slate-800 shadow-2xl z-30">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 bg-indigo-600 rounded-2xl shadow-xl shadow-indigo-500/20">
+      <header className="flex items-center justify-between px-6 py-6 bg-slate-900 border-b border-slate-800 shadow-2xl z-30">
+        <div className="flex items-center">
+          <motion.div 
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            className="p-3 bg-indigo-600 rounded-[1.25rem] shadow-xl shadow-indigo-500/20"
+          >
             <Bot className="w-6 h-6 text-white" />
-          </div>
+          </motion.div>
         </div>
         
         <button 
@@ -523,11 +525,15 @@ export default function App() {
                     />
                     <button 
                       onClick={() => handleSaveKey(apiKey)}
-                      className={`w-full py-4 font-black rounded-3xl transition-all shadow-xl ${
-                        isKeySaved ? 'bg-green-600 text-white' : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                      className={`w-full py-4 font-black rounded-3xl transition-all shadow-xl tracking-tight ${
+                        (localStorage.getItem('english_trainer_api_key') === apiKey && apiKey.length > 10)
+                          ? 'bg-green-600 text-white shadow-green-500/20' 
+                          : 'bg-indigo-600 text-white hover:bg-indigo-700'
                       }`}
                     >
-                      {isKeySaved ? '✓ SAVED SUCCESSFULLY' : 'SAVE KEY TO DEVICE'}
+                      {(localStorage.getItem('english_trainer_api_key') === apiKey && apiKey.length > 10) 
+                        ? '✓ KEY IS SECURED' 
+                        : 'SAVE KEY TO DEVICE'}
                     </button>
                   </div>
                   <p className="text-[10px] text-slate-600">Stored locally on your S24 Ultra.</p>
@@ -719,8 +725,8 @@ export default function App() {
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder={isListening ? "Listening..." : "Type a message..."}
-              className="flex-1 p-4 bg-slate-950 border border-slate-700 rounded-[2rem] focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-slate-100 text-sm transition-all placeholder:text-slate-700"
+              placeholder={isListening ? "[ Speaking... ]" : "Type a message..."}
+              className="flex-1 p-4 bg-slate-950 border border-slate-700 rounded-[2rem] focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-slate-100 text-sm transition-all placeholder:text-indigo-400 placeholder:animate-pulse"
               disabled={isLoading || isListening}
             />
             <button

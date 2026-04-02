@@ -10,11 +10,12 @@ function getApiKey() {
     || '';
 }
 
-function getAIInstance() {
-  const key = getApiKey();
-  // We should NOT use dummy keys as the SDK internally validates them.
-  // If no key is present, this will naturally throw or be caught before.
-  return new GoogleGenAI(key || '');
+function getAIInstance(apiKey?: string) {
+  const key = apiKey || getApiKey();
+  if (!key) {
+    throw new Error('An API Key must be provided.');
+  }
+  return new GoogleGenAI(key);
 }
 
 export function hasValidKey() {
@@ -30,12 +31,8 @@ const INSTRUCTIONS = {
 
 export type ChatMode = 'friendly' | 'coach';
 
-export async function* sendMessageStream(message: string, history: Content[] = [], mode: ChatMode = 'friendly') {
-  if (!hasValidKey()) {
-    throw new Error('An API Key must be set before sending messages.');
-  }
-
-  const ai = getAIInstance();
+export async function* sendMessageStream(message: string, history: Content[] = [], mode: ChatMode = 'friendly', apiKey?: string) {
+  const ai = getAIInstance(apiKey);
   
   const contents: Content[] = [
     ...history,
