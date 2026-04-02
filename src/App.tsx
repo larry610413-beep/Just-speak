@@ -46,6 +46,8 @@ export default function App() {
     return (saved && saved.trim().length > 10) ? saved : '';
   });
   const [isKeySaved, setIsKeySaved] = useState(false);
+  const [selectedVoiceURI, setSelectedVoiceURI] = useState(() => localStorage.getItem('english_trainer_voice_uri') || '');
+  const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
   const transcriptRef = useRef('');
   const recognitionRef = useRef<any>(null);
   const isProcessingRef = useRef(false);
@@ -60,7 +62,8 @@ export default function App() {
     // Preload voices for window.speechSynthesis
     const synth = window.speechSynthesis;
     const loadVoices = () => {
-      synth.getVoices();
+      const v = synth.getVoices();
+      setAvailableVoices(v.filter(voice => voice.lang.startsWith('en')));
     };
     if (synth.onvoiceschanged !== undefined) {
       synth.onvoiceschanged = loadVoices;
@@ -151,6 +154,11 @@ export default function App() {
   const getBestVoice = () => {
     const synth = window.speechSynthesis;
     const voices = synth.getVoices();
+
+    if (selectedVoiceURI) {
+       const userVoice = voices.find(v => v.voiceURI === selectedVoiceURI);
+       if (userVoice) return userVoice;
+    }
     
     // 找出所有美國英語語音
     const usVoices = voices.filter(v => v.lang === 'en-US' || v.lang === 'en_US');
@@ -557,6 +565,39 @@ export default function App() {
                     />
                   </div>
                   <p className="text-[10px] text-slate-500 italic">Resets every 24 hours.</p>
+                </div>
+
+                {/* Voice Selection */}
+                <div className="space-y-3 relative">
+                  <div className="flex items-center gap-2 text-slate-400">
+                    <Volume2 className="w-4 h-4" />
+                    <p className="text-[10px] font-black uppercase tracking-widest">Voice Engine</p>
+                  </div>
+                  <div className="flex flex-col gap-3">
+                    <select 
+                      value={selectedVoiceURI} 
+                      onChange={(e) => {
+                        const uri = e.target.value;
+                        setSelectedVoiceURI(uri);
+                        localStorage.setItem('english_trainer_voice_uri', uri);
+                        const synth = window.speechSynthesis;
+                        synth.cancel();
+                        const utterance = new SpeechSynthesisUtterance("Hi, nice to meet you.");
+                        const v = availableVoices.find(v => v.voiceURI === uri);
+                        if (v) utterance.voice = v;
+                        synth.speak(utterance);
+                      }}
+                      className="w-full bg-slate-950 border border-slate-700 text-slate-100 px-5 py-4 rounded-3xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-sm transition-all appearance-none"
+                    >
+                      <option value="">Auto Select Best Voice</option>
+                      {availableVoices.map((v) => (
+                        <option key={v.voiceURI} value={v.voiceURI}>
+                          {v.name} {v.localService ? '(Device)' : '(Online)'}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <p className="text-[10px] text-slate-600">Select any English voice installed on your system. Choosing '(Online)' usually gives the best human-like results.</p>
                 </div>
 
                 {/* API Key Input */}
