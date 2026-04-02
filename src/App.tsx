@@ -241,12 +241,11 @@ export default function App() {
         recognition.stop();
       } catch (e) {}
       
-      // Capture whatever we have immediately
+      // Capture everything we have immediately (including interim if needed)
       const finalTranscript = transcriptRef.current.trim();
       if (finalTranscript) {
         handleSend(finalTranscript);
         transcriptRef.current = ''; 
-        // Do NOT setInput here intentionally
       }
     }
   };
@@ -255,19 +254,12 @@ export default function App() {
     if (!recognition) return;
 
     recognition.onresult = (event: any) => {
-      let currentTranscript = '';
-      for (let i = event.resultIndex; i < event.results.length; ++i) {
-        const result = event.results[i][0].transcript;
-        if (event.results[i].isFinal) {
-          transcriptRef.current = result;
-        } else {
-          currentTranscript += result;
-        }
+      let fullTranscript = '';
+      for (let i = 0; i < event.results.length; ++i) {
+        fullTranscript += event.results[i][0].transcript;
       }
-      
-      const latestValue = transcriptRef.current || currentTranscript;
-      if (latestValue.trim()) {
-        transcriptRef.current = latestValue;
+      if (fullTranscript.trim()) {
+        transcriptRef.current = fullTranscript;
       }
     };
 
@@ -714,8 +706,8 @@ export default function App() {
       </main>
 
       {/* Voice Control Area */}
-      <footer className="p-6 md:p-10 bg-slate-900 border-t border-slate-800 shadow-2xl rounded-t-[3rem] z-20">
-        <div className="max-w-3xl mx-auto flex flex-col items-center gap-10">
+      <footer className="flex-none p-4 md:p-5 bg-slate-900 border-t border-slate-800 shadow-2xl rounded-t-[2.5rem] z-20">
+        <div className="max-w-3xl mx-auto flex flex-col items-center gap-6">
           {/* Text Input Row */}
           <form 
             onSubmit={(e) => { e.preventDefault(); handleSend(input); }}
@@ -738,14 +730,13 @@ export default function App() {
             </button>
           </form>
 
-          {/* Voice Button Row (Toggle Mode) */}
-          <div className="flex flex-col items-center gap-4 pb-4">
+          <div className="flex flex-col items-center gap-3 pb-2">
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.9 }}
               onClick={toggleListening}
               disabled={isLoading || isSpeaking}
-              className={`w-24 h-24 rounded-full flex items-center justify-center shadow-2xl transition-all relative select-none touch-none ${
+              className={`w-14 h-14 rounded-full flex items-center justify-center shadow-2xl transition-all relative select-none touch-none ${
                 isListening 
                   ? 'bg-red-500 text-white shadow-red-500/40' 
                   : (isLoading || isSpeaking) ? 'bg-slate-800 text-slate-600 cursor-not-allowed' : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-500/40'
