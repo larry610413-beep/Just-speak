@@ -42,7 +42,7 @@ export async function* sendMessageStream(message: string, history: Content[] = [
   ];
 
   const response = await ai.models.generateContentStream({
-    model: 'gemini-1.5-flash-001',
+    model: 'gemini-flash-latest',
     contents: contents,
     config: {
       systemInstruction: INSTRUCTIONS[mode]
