@@ -151,14 +151,19 @@ export default function App() {
   const getBestVoice = () => {
     const synth = window.speechSynthesis;
     const voices = synth.getVoices();
-    // Priority: Premium iOS/Mac voices > Edge Natural > Google Network > Generic
-    return voices.find(v => v.name.includes('Samantha')) || // Premium iOS/Mac female
-           voices.find(v => v.name.includes('Alex')) || // Premium Mac male
-           voices.find(v => v.name.includes('Aria') && v.name.includes('Online')) || // Edge natural
-           voices.find(v => v.name.includes('Google') && v.name.includes('Network') && v.lang === 'en-US') || // Android Network
-           voices.find(v => v.name.includes('Google US English')) || // Android local fallback
-           voices.find(v => v.name.includes('Microsoft Zira')) || // Windows local
-           voices.find(v => v.lang === 'en-US' && !v.localService) || // Any network voice
+    
+    // First, strictly look for high-quality network voices
+    const networkVoice = voices.find(v => 
+      v.lang.startsWith('en') && 
+      (v.name.toLowerCase().includes('network') || v.name.toLowerCase().includes('online') || !v.localService)
+    );
+    if (networkVoice) return networkVoice;
+
+    // Second, look for known premium OS voices
+    return voices.find(v => v.name.includes('Samantha')) || // Mac/iOS
+           voices.find(v => v.name.includes('Alex')) || // Mac
+           voices.find(v => v.name.includes('Aria')) || // Edge
+           voices.find(v => v.name.includes('Google US English')) || // Standard Android
            voices.find(v => v.lang === 'en-US') ||
            voices.find(v => v.lang.startsWith('en')) ||
            null;
