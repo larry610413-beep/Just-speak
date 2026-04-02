@@ -49,6 +49,7 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [usage, setUsage] = useState<UsageStats>({ count: 0, lastReset: new Date().toISOString() });
   const [apiKey, setApiKey] = useState(localStorage.getItem('english_trainer_api_key') || '');
+  const [isKeySaved, setIsKeySaved] = useState(false);
   const transcriptRef = useRef('');
   const isProcessingRef = useRef(false);
   const audioQueueRef = useRef<string[]>([]);
@@ -170,7 +171,8 @@ export default function App() {
     localStorage.setItem('english_trainer_api_key', key);
     setApiKey(key);
     setHasError(null);
-    // Restart session
+    setIsKeySaved(true);
+    setTimeout(() => setIsKeySaved(false), 2000); // Reset after 2s
   };
 
   const toggleListening = () => {
@@ -241,11 +243,11 @@ export default function App() {
       
       // Small delay to ensure onresult has fired its final chunk
       setTimeout(() => {
-        const finalTranscript = transcriptRef.current.trim() || input.trim();
+        const finalTranscript = transcriptRef.current.trim();
         if (finalTranscript) {
           handleSend(finalTranscript);
           transcriptRef.current = ''; 
-          setInput(''); 
+          // Do NOT setInput here to keep input box clean as requested
         }
       }, 500);
     }
@@ -260,7 +262,7 @@ export default function App() {
       const transcript = event.results[0][0].transcript;
       if (transcript.trim()) {
         transcriptRef.current = transcript;
-        setInput(transcript); // Show it in the box while speaking as requested
+        // Do NOT setInput(transcript) to keep it direct as requested
       }
     };
 
@@ -515,9 +517,11 @@ export default function App() {
                     />
                     <button 
                       onClick={() => handleSaveKey(apiKey)}
-                      className="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100"
+                      className={`w-full py-3 font-bold rounded-xl transition-all shadow-md ${
+                        isKeySaved ? 'bg-green-600 text-white' : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                      }`}
                     >
-                      Save Key to Device
+                      {isKeySaved ? '✓ Key Saved Successfully' : 'Save Key to Device'}
                     </button>
                   </div>
                   <p className="text-[10px] text-gray-400">Stored only on this device. Never shared with GitHub.</p>

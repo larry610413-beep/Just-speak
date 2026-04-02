@@ -12,13 +12,15 @@ function getApiKey() {
 
 function getAIInstance() {
   const key = getApiKey();
-  // @google/genai 1.x uses the key as the first argument to the constructor
-  return new GoogleGenAI(key || 'dummy-key');
+  // We should NOT use dummy keys as the SDK internally validates them.
+  // If no key is present, this will naturally throw or be caught before.
+  return new GoogleGenAI(key || '');
 }
 
 export function hasValidKey() {
   const key = getApiKey();
-  return !!key && key !== 'dummy-key';
+  // Gemini Keys are usually long strings (e.g. 39+ chars starting with AIza)
+  return !!key && key.length > 20;
 }
 
 const INSTRUCTIONS = {
@@ -28,12 +30,13 @@ const INSTRUCTIONS = {
 
 export type ChatMode = 'friendly' | 'coach';
 
-// Since @google/genai 1.x is stateless/stateless-leaning, 
-// we will manage history externally or use the simple generateContent approach.
 export async function* sendMessageStream(message: string, history: Content[] = [], mode: ChatMode = 'friendly') {
+  if (!hasValidKey()) {
+    throw new Error('An API Key must be set before sending messages.');
+  }
+
   const ai = getAIInstance();
   
-  // Format history for the new SDK
   const contents: Content[] = [
     ...history,
     { role: 'user', parts: [{ text: message }] }
