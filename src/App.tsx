@@ -6,7 +6,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Bot, User, Loader2, Sparkles, Trash2, Mic, MicOff, Volume2, VolumeX } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { sendMessageStream, getChat, generateSpeech } from './gemini';
+import { sendMessageStream, getChat, generateSpeech, ChatMode } from './gemini';
+import { Settings, Shield, Coffee } from 'lucide-react';
 
 interface Message {
   id: string;
@@ -36,6 +37,8 @@ export default function App() {
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [hasError, setHasError] = useState<string | null>(null);
   const [isIframe, setIsIframe] = useState(false);
+  const [mode, setMode] = useState<ChatMode>('friendly');
+  const [isGeneratingSpeech, setIsGeneratingSpeech] = useState(false);
   const transcriptRef = useRef('');
   const isProcessingRef = useRef(false);
   const audioQueueRef = useRef<string[]>([]);
@@ -91,48 +94,36 @@ export default function App() {
     setShowClearConfirm(false);
   };
 
-  const playResponse = (text: string) => {
-    if (!text.trim()) return;
+  const playResponse = async (text: string) => {
+    if (!text.trim() || isGeneratingSpeech) return;
     
-    return new Promise<void>((resolve) => {
-      // Safety check for SpeechSynthesis support
-      if (!window.speechSynthesis) {
-        console.warn('SpeechSynthesis not supported');
-        resolve();
-        return;
+    setIsGeneratingSpeech(true);
+    try {
+      const base64Audio = await generateSpeech(text);
+      if (base64Audio) {
+        const audio = new Audio(`data:audio/mp3;base64,${base64Audio}`);
+        setIsSpeaking(true);
+        audio.onended = () => {
+          setIsSpeaking(false);
+          setIsGeneratingSpeech(false);
+        };
+        await audio.play();
+      } else {
+        // Fallback to browser TTS if Gemini TTS fails
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'en-US';
+        utterance.onstart = () => setIsSpeaking(true);
+        utterance.onend = () => {
+          setIsSpeaking(false);
+          setIsGeneratingSpeech(false);
+        };
+        window.speechSynthesis.speak(utterance);
       }
-
-      // Use browser's native SpeechSynthesis (FREE and INSTANT)
-      const utterance = new SpeechSynthesisUtterance(text);
-      
-      // Try to find a natural English voice
-      const voices = window.speechSynthesis.getVoices() || [];
-      const englishVoice = voices.length > 0 
-        ? (voices.find(v => v.lang.startsWith('en') && v.name.includes('Google')) || 
-           voices.find(v => v.lang.startsWith('en')))
-        : null;
-      
-      if (englishVoice) {
-        utterance.voice = englishVoice;
-      }
-      
-      utterance.lang = 'en-US';
-      utterance.rate = 1.0; // Normal speed
-      utterance.pitch = 1.0;
-
-      utterance.onstart = () => setIsSpeaking(true);
-      utterance.onend = () => {
-        setIsSpeaking(false);
-        resolve();
-      };
-      utterance.onerror = (event) => {
-        console.error('SpeechSynthesis error:', event);
-        setIsSpeaking(false);
-        resolve();
-      };
-
-      window.speechSynthesis.speak(utterance);
-    });
+    } catch (err) {
+      console.error('Playback error:', err);
+      setIsGeneratingSpeech(false);
+      setIsSpeaking(false);
+    }
   };
 
   const processAudioQueue = async () => {
@@ -284,7 +275,7 @@ export default function App() {
     try {
       let fullResponse = '';
       let lastProcessedIndex = 0;
-      const stream = sendMessageStream(userMessage.content);
+      const stream = sendMessageStream(userMessage.content, [], mode);
       
       for await (const chunk of stream) {
         fullResponse += chunk;
@@ -341,7 +332,7 @@ export default function App() {
       setMessages((prev) =>
         prev.map((msg) =>
           msg.id === assistantMessageId
-            ? { ...msg, content: `【系統提示】：${errorMessage}` }
+            ? { ...msg, content: `[System]: ${errorMessage}` }
             : msg
         )
       );
@@ -360,10 +351,33 @@ export default function App() {
             <Bot className="w-6 h-6 text-white" />
           </div>
           <div>
-            <h1 className="text-lg font-bold tracking-tight text-indigo-900 leading-tight">English Trainer</h1>
-            <p className="text-[10px] text-indigo-500 font-bold uppercase tracking-widest">Interactive Voice Lab</p>
+            <h1 className="text-lg font-bold tracking-tight text-indigo-900 leading-tight">Just-speak</h1>
+            <p className="text-[10px] text-indigo-500 font-bold uppercase tracking-widest">AI English Coach</p>
           </div>
         </div>
+        
+        {/* Mode Toggle */}
+        <div className="flex bg-gray-100 p-1 rounded-xl gap-1">
+          <button 
+            onClick={() => setMode('friendly')}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              mode === 'friendly' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <Coffee className="w-3.5 h-3.5" />
+            Friendly
+          </button>
+          <button 
+            onClick={() => setMode('coach')}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              mode === 'coach' ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <Shield className="w-3.5 h-3.5" />
+            Coach
+          </button>
+        </div>
+
         <div className="flex items-center gap-4">
           {messages.length > 0 && (
             <button
@@ -391,21 +405,21 @@ export default function App() {
                 <div className="p-2 bg-red-50 rounded-full">
                   <Trash2 className="w-6 h-6" />
                 </div>
-                <h3 className="text-lg font-bold">清除紀錄？</h3>
+                <h3 className="text-lg font-bold">Clear History?</h3>
               </div>
-              <p className="text-gray-600">這將會永久刪除你所有的對話歷史，確定要繼續嗎？</p>
+              <p className="text-gray-600">This will permanently delete all your conversation history. Continue?</p>
               <div className="flex gap-3 pt-2">
                 <button 
                   onClick={() => setShowClearConfirm(false)}
                   className="flex-1 py-3 px-4 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl transition-all"
                 >
-                  取消
+                  Cancel
                 </button>
                 <button 
                   onClick={handleClearHistory}
                   className="flex-1 py-3 px-4 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition-all shadow-lg shadow-red-200"
                 >
-                  確定清除
+                  Clear All
                 </button>
               </div>
             </motion.div>
@@ -427,11 +441,11 @@ export default function App() {
               <div className="space-y-2">
                 <p className="font-bold">{hasError}</p>
                 <div className="space-y-1 text-xs opacity-80">
-                  <p>解決方法：</p>
+                  <p>How to fix:</p>
                   <ul className="list-disc list-inside space-y-1">
-                    <li>點擊網址列左側的「鎖頭」或「設定」圖示，將「麥克風」設為「允許」。</li>
-                    <li>如果您是在 AI Studio 預覽視窗中，請點擊下方的「在新分頁開啟」按鈕。</li>
-                    <li>確保您的手機系統設定中也已允許瀏覽器存取麥克風。</li>
+                    <li>Click the lock icon in the address bar and allow Microphone access.</li>
+                    <li>If you are in a preview window, try opening in a new tab.</li>
+                    <li>Ensure your system settings also allow the browser access.</li>
                   </ul>
                 </div>
               </div>
@@ -441,14 +455,14 @@ export default function App() {
                 onClick={() => setHasError(null)}
                 className="px-3 py-1.5 bg-white border border-red-200 text-red-600 text-xs font-bold rounded-lg hover:bg-red-50 transition-all"
               >
-                關閉提示
+                Dismiss
               </button>
               {isIframe && (
                 <button 
                   onClick={() => window.open(window.location.href, '_blank')}
                   className="px-3 py-1.5 bg-red-600 text-white text-xs font-bold rounded-lg hover:bg-red-700 transition-all shadow-sm"
                 >
-                  在新分頁開啟 (解決權限問題)
+                  Open in New Tab (Fix Permissions)
                 </button>
               )}
             </div>
@@ -476,9 +490,9 @@ export default function App() {
                 />
               </div>
               <div className="space-y-3">
-                <h2 className="text-3xl font-extrabold text-gray-900 tracking-tight">Let's Talk English!</h2>
-                <p className="text-gray-500 max-w-sm mx-auto text-lg">
-                  I'm your personal AI coach. Tap the mic and say something like "How's your day?"
+                <h2 className="text-3xl font-extrabold text-gray-900 tracking-tight">Let's practice English!</h2>
+                <p className="text-gray-500 max-w-sm mx-auto text-lg leading-relaxed">
+                  I'm your AI partner. Choose <b>Friendly</b> for casual chat, or <b>Coach</b> for active corrections.
                 </p>
               </div>
             </motion.div>
@@ -540,7 +554,7 @@ export default function App() {
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Type message..."
+              placeholder={isListening ? "Listening..." : "Type a message..."}
               className="flex-1 p-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm transition-all"
               disabled={isLoading || isListening}
             />

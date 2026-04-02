@@ -30,6 +30,7 @@
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",
     "vite": "^6.2.0",
-    "@types/express": "^4.17.21"
+    "@types/express": "^4.17.21",
+    "vite-plugin-pwa": "^0.21.1"
   }
 }
