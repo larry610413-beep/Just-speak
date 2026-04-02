@@ -6,8 +6,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Bot, User, Loader2, Sparkles, Trash2, Mic, MicOff, Volume2, VolumeX } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { sendMessageStream, getChat, generateSpeech, ChatMode } from './gemini';
-import { Settings, Shield, Coffee } from 'lucide-react';
+import { sendMessageStream, generateSpeech, ChatMode } from './gemini';
+import { Settings, Shield, Coffee, Key } from 'lucide-react';
+import { hasValidKey } from './gemini';
 
 interface Message {
   id: string;
@@ -47,6 +48,7 @@ export default function App() {
   const [isGeneratingSpeech, setIsGeneratingSpeech] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [usage, setUsage] = useState<UsageStats>({ count: 0, lastReset: new Date().toISOString() });
+  const [apiKey, setApiKey] = useState(localStorage.getItem('english_trainer_api_key') || '');
   const transcriptRef = useRef('');
   const isProcessingRef = useRef(false);
   const audioQueueRef = useRef<string[]>([]);
@@ -65,17 +67,9 @@ export default function App() {
           index === self.findIndex((m) => m.id === msg.id)
         );
         setMessages(uniqueHistory);
-        
-        const geminiHistory = uniqueHistory.map((msg: Message) => ({
-          role: msg.role === 'user' ? 'user' : 'model',
-          parts: [{ text: msg.content }]
-        }));
-        getChat(geminiHistory);
       } catch (e) {
         console.error('Failed to parse history', e);
       }
-    } else {
-      getChat([]);
     }
     // Load usage stats
     const savedUsage = localStorage.getItem(USAGE_KEY);
@@ -119,7 +113,6 @@ export default function App() {
   const handleClearHistory = () => {
     setMessages([]);
     localStorage.removeItem(STORAGE_KEY);
-    getChat([]);
     setShowClearConfirm(false);
   };
 
@@ -171,6 +164,13 @@ export default function App() {
   const queueAudio = (text: string) => {
     audioQueueRef.current.push(text);
     processAudioQueue();
+  };
+
+  const handleSaveKey = (key: string) => {
+    localStorage.setItem('english_trainer_api_key', key);
+    setApiKey(key);
+    setHasError(null);
+    // Restart session
   };
 
   const toggleListening = () => {
@@ -239,15 +239,15 @@ export default function App() {
         recognition.stop();
       } catch (e) {}
       
-      // Small delay to ensure onresult has fired
+      // Small delay to ensure onresult has fired its final chunk
       setTimeout(() => {
-        if (transcriptRef.current.trim()) {
-          const textToSend = transcriptRef.current;
+        const finalTranscript = transcriptRef.current.trim() || input.trim();
+        if (finalTranscript) {
+          handleSend(finalTranscript);
           transcriptRef.current = ''; 
           setInput(''); 
-          handleSend(textToSend);
         }
-      }, 300);
+      }, 500);
     }
   };
 
@@ -260,7 +260,7 @@ export default function App() {
       const transcript = event.results[0][0].transcript;
       if (transcript.trim()) {
         transcriptRef.current = transcript;
-        // Removed setInput(transcript) to keep voice input separate from text box
+        setInput(transcript); // Show it in the box while speaking as requested
       }
     };
 
@@ -290,6 +290,12 @@ export default function App() {
   const handleSend = async (text: string) => {
     if (!text.trim() || isLoading || isSpeaking || isProcessingRef.current) return;
 
+    if (!hasValidKey()) {
+      setHasError('Missing Gemini API Key. Please add it in Settings.');
+      setShowSettings(true);
+      return;
+    }
+
     isProcessingRef.current = true;
     
     // Update usage count
@@ -318,7 +324,14 @@ export default function App() {
     try {
       let fullResponse = '';
       let lastProcessedIndex = 0;
-      const stream = sendMessageStream(userMessage.content, [], mode);
+      
+      // Convert messages to Gemini Content format for history
+      const history = messages.map(m => ({
+        role: m.role === 'user' ? 'user' : 'model',
+        parts: [{ text: m.content }]
+      }));
+
+      const stream = sendMessageStream(userMessage.content, history, mode);
       
       for await (const chunk of stream) {
         fullResponse += chunk;
@@ -399,27 +412,27 @@ export default function App() {
           </div>
         </div>
         
-        {/* Mode Toggle */}
-        <div className="flex bg-gray-100 p-1 rounded-xl gap-1">
-          <button 
-            onClick={() => setMode('friendly')}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-              mode === 'friendly' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            <Coffee className="w-3.5 h-3.5" />
-            Friendly
-          </button>
-          <button 
-            onClick={() => setMode('coach')}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-              mode === 'coach' ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            <Shield className="w-3.5 h-3.5" />
-            Coach
-          </button>
-        </div>
+        {/* Unified Mode Toggle */}
+        <button 
+          onClick={() => setMode(mode === 'friendly' ? 'coach' : 'friendly')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all shadow-sm border ${
+            mode === 'friendly' 
+              ? 'bg-white border-indigo-100 text-indigo-600' 
+              : 'bg-indigo-600 border-indigo-700 text-white'
+          }`}
+        >
+          {mode === 'friendly' ? (
+            <>
+              <Coffee className="w-4 h-4" />
+              <span>Friendly</span>
+            </>
+          ) : (
+            <>
+              <Shield className="w-4 h-4" />
+              <span>Coach</span>
+            </>
+          )}
+        </button>
 
         <div className="flex items-center gap-4">
           <button
@@ -484,6 +497,30 @@ export default function App() {
                     />
                   </div>
                   <p className="text-[10px] text-gray-500 italic">Resets every 24 hours. Based on Gemini Free Tier limits.</p>
+                </div>
+
+                {/* API Key Input */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-gray-600">
+                    <Key className="w-4 h-4" />
+                    <p className="text-xs font-bold uppercase tracking-wider">Gemini API Key</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <input 
+                      type="password"
+                      value={apiKey}
+                      onChange={(e) => setApiKey(e.target.value)}
+                      placeholder="Paste your key here..."
+                      className="flex-1 p-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm transition-all"
+                    />
+                    <button 
+                      onClick={() => handleSaveKey(apiKey)}
+                      className="px-4 py-2 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-all shadow-md"
+                    >
+                      Save
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-gray-400">Stored only on this device. Never shared with GitHub.</p>
                 </div>
 
                 <a 
@@ -573,6 +610,12 @@ export default function App() {
                 className="px-3 py-1.5 bg-white border border-red-200 text-red-600 text-xs font-bold rounded-lg hover:bg-red-50 transition-all"
               >
                 Dismiss
+              </button>
+              <button 
+                onClick={() => { setHasError(null); setShowSettings(true); }}
+                className="px-3 py-1.5 bg-indigo-600 text-white text-xs font-bold rounded-lg hover:bg-indigo-700 transition-all shadow-sm"
+              >
+                Set API Key
               </button>
               {isIframe && (
                 <button 

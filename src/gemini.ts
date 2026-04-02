@@ -1,26 +1,25 @@
-import { GoogleGenAI, Content, Modality } from "@google/genai";
+import { GoogleGenAI, Content } from "@google/genai";
 
-let apiKey = (window as any).GEMINI_API_KEY 
-  || (typeof process !== 'undefined' && process?.env ? process.env.GEMINI_API_KEY : '') 
-  || (import.meta as any).env?.VITE_GEMINI_API_KEY 
-  || '';
+const API_KEY_STORAGE = 'english_trainer_api_key';
 
-// If key is still missing, try to fetch it from the server
-if (!apiKey) {
-  fetch('/api/config')
-    .then(res => res.json())
-    .then(config => {
-      if (config.apiKey) {
-        apiKey = config.apiKey;
-        (window as any).GEMINI_API_KEY = apiKey;
-      }
-    })
-    .catch(err => console.error('Failed to fetch API config:', err));
+function getApiKey() {
+  return localStorage.getItem(API_KEY_STORAGE) 
+    || (window as any).GEMINI_API_KEY 
+    || (typeof process !== 'undefined' && process?.env ? process.env.GEMINI_API_KEY : '') 
+    || (import.meta as any).env?.VITE_GEMINI_API_KEY 
+    || '';
 }
 
-const ai = new GoogleGenAI({ apiKey: apiKey || 'dummy-key' });
+function getAIInstance() {
+  const key = getApiKey();
+  // @google/genai 1.x uses the key as the first argument to the constructor
+  return new GoogleGenAI(key || 'dummy-key');
+}
 
-let chatInstance: any = null;
+export function hasValidKey() {
+  const key = getApiKey();
+  return !!key && key !== 'dummy-key';
+}
 
 const INSTRUCTIONS = {
   friendly: "You are a friendly companion. Your goal is to have a natural, casual conversation in English. Check in on the user's day, be supportive, and keep the vibe light. Do NOT correct their grammar unless it's completely unintelligible. Just chat like a real friend.",
@@ -29,52 +28,32 @@ const INSTRUCTIONS = {
 
 export type ChatMode = 'friendly' | 'coach';
 
-export function getChat(history: Content[] = [], mode: ChatMode = 'friendly') {
-  chatInstance = ai.chats.create({
-    model: "gemini-1.5-flash", 
-    history: history,
-    config: {
-      systemInstruction: INSTRUCTIONS[mode],
-    },
-  });
-  return chatInstance;
-}
-
-export async function sendMessage(message: string, history: Content[] = [], mode: ChatMode = 'friendly') {
-  const chat = chatInstance || getChat(history, mode);
-  const response = await chat.sendMessage({ message });
-  return response.text;
-}
-
+// Since @google/genai 1.x is stateless/stateless-leaning, 
+// we will manage history externally or use the simple generateContent approach.
 export async function* sendMessageStream(message: string, history: Content[] = [], mode: ChatMode = 'friendly') {
-  const chat = chatInstance || getChat(history, mode);
-  const response = await chat.sendMessageStream({ message });
+  const ai = getAIInstance();
+  
+  // Format history for the new SDK
+  const contents: Content[] = [
+    ...history,
+    { role: 'user', parts: [{ text: message }] }
+  ];
+
+  const response = await ai.models.generateContentStream({
+    model: 'gemini-1.5-flash',
+    contents: contents,
+    config: {
+      systemInstruction: INSTRUCTIONS[mode]
+    }
+  });
+
   for await (const chunk of response) {
-    yield chunk.text;
+    if (chunk.text) {
+      yield chunk.text;
+    }
   }
 }
 
-export async function generateSpeech(text: string) {
-  try {
-    // Using gemini-1.5-flash for TTS capability if supported, 
-    // or keep using the specialized tts model
-    const response = await ai.models.generateContent({
-      model: "gemini-1.5-flash", // Using 1.5-flash which is widely available
-      contents: [{ parts: [{ text }] }],
-      config: {
-        responseModalities: [Modality.AUDIO],
-        speechConfig: {
-          voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: 'Zephyr' }, // Options: Puck, Charon, Kore, Fenrir, Zephyr
-          },
-        },
-      },
-    });
-
-    const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-    return base64Audio;
-  } catch (err) {
-    console.error('TTS error:', err);
-    return null;
-  }
+export async function generateSpeech(text: string): Promise<string | null> {
+  return null;
 }
