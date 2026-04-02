@@ -257,12 +257,11 @@ export default function App() {
     if (!recognition) return;
 
     recognition.onresult = (event: any) => {
-      if (isLoading || isSpeaking || isProcessingRef.current) return;
-
+      // ALWAYS capture the voice regardless of AI state
       const transcript = event.results[0][0].transcript;
       if (transcript.trim()) {
         transcriptRef.current = transcript;
-        // Do NOT setInput(transcript) to keep it direct as requested
+        // Do NOT setInput(transcript) here
       }
     };
 
@@ -290,30 +289,31 @@ export default function App() {
   }, [isLoading, isSpeaking]); // Add dependencies to ensure the latest state is used
 
   const handleSend = async (text: string) => {
-    if (!text.trim() || isLoading || isSpeaking || isProcessingRef.current) return;
+    if (!text.trim()) return;
 
+    // Add user message to UI immediately no matter what
+    const userMessage: Message = {
+      id: typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Math.random().toString(36).substring(2),
+      role: 'user',
+      content: text,
+    };
+    setMessages((prev) => [...prev, userMessage]);
+    setInput('');
+
+    // Pre-flight checks for the model
     if (!hasValidKey()) {
       setHasError('Missing Gemini API Key. Please add it in Settings.');
       setShowSettings(true);
       return;
     }
 
-    isProcessingRef.current = true;
-    
     // Update usage count
     const newCount = usage.count + 1;
     const newUsage = { ...usage, count: newCount };
     setUsage(newUsage);
-    localStorage.setItem(USAGE_KEY, JSON.stringify(newUsage));
+    localStorage.setItem('english_trainer_usage', JSON.stringify(newUsage));
 
-    const userMessage: Message = {
-      id: typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Math.random().toString(36).substring(2),
-      role: 'user',
-      content: text,
-    };
-
-    setMessages((prev) => [...prev, userMessage]);
-    setInput('');
+    isProcessingRef.current = true;
     setIsLoading(true);
     setHasError(null);
 
@@ -544,6 +544,10 @@ export default function App() {
               >
                 Close
               </button>
+
+              <div className="text-center pt-2 border-t border-gray-100">
+                <p className="text-[10px] text-gray-300 font-bold tracking-widest uppercase">Version 1.0.1+DirectVoice</p>
+              </div>
             </motion.div>
           </div>
         )}
