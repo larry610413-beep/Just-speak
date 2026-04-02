@@ -200,6 +200,7 @@ export default function App() {
     }
 
     transcriptRef.current = '';
+    setInput(''); // Clear input box for a fresh recording session
     setHasError(null);
     try {
       if (recognition) {
@@ -257,14 +258,17 @@ export default function App() {
     if (!recognition) return;
 
     recognition.onresult = (event: any) => {
-      let fullTranscript = '';
-      for (let i = 0; i < event.results.length; ++i) {
-        fullTranscript += event.results[i][0].transcript;
+      // CRITICAL: Only process NEW results from event.resultIndex
+      // Starting from 0 causes duplication on every interim update
+      let newText = '';
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        newText += event.results[i][0].transcript;
       }
-      if (fullTranscript.trim()) {
-        transcriptRef.current = fullTranscript;
-        // Live feedback: update the input box as the user speaks
-        setInput(fullTranscript);
+      if (newText.trim()) {
+        // Append to existing transcript instead of rebuilding from scratch
+        const updated = (transcriptRef.current + ' ' + newText).trim();
+        transcriptRef.current = updated;
+        setInput(updated);
       }
     };
 
