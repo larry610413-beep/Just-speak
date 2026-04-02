@@ -24,16 +24,8 @@ interface UsageStats {
   lastReset: string; // ISO date string
 }
 
-// Speech Recognition setup
+// Speech Recognition factory - create fresh instance each time to avoid stale state
 const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-const recognition = SpeechRecognition ? new SpeechRecognition() : null;
-
-if (recognition) {
-  // Non-continuous, no interim: mobile Chrome gives one clean final result
-  recognition.continuous = false;
-  recognition.interimResults = false;
-  recognition.lang = 'en-US';
-}
 
 export default function App() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -55,6 +47,7 @@ export default function App() {
   });
   const [isKeySaved, setIsKeySaved] = useState(false);
   const transcriptRef = useRef('');
+  const recognitionRef = useRef<any>(null);
   const isProcessingRef = useRef(false);
   const audioQueueRef = useRef<string[]>([]);
   const isPlayingQueueRef = useRef(false);
@@ -180,115 +173,88 @@ export default function App() {
   };
 
   const toggleListening = () => {
-    if (!recognition) {
-      setHasError('Your browser does not support Speech Recognition. Please use Google Chrome or Safari.');
+    if (!SpeechRecognition) {
+      setHasError('Your browser does not support Speech Recognition. Please use Google Chrome or Samsung Internet.');
       return;
     }
     
     if (isListening) {
       stopListening();
     } else {
-      startListening();
+      startListening(handleSend);
     }
   };
 
-  const startListening = () => {
+  const startListening = (sendFn: (text: string) => void) => {
     if (isLoading || isSpeaking) return;
-    
-    // Add haptic feedback for mobile
-    if ('vibrate' in navigator) {
-      navigator.vibrate(50);
+
+    if ('vibrate' in navigator) navigator.vibrate(50);
+
+    // Stop previous session cleanly
+    if (recognitionRef.current) {
+      try { recognitionRef.current.abort(); } catch (e) {}
     }
 
+    if (!SpeechRecognition) {
+      setHasError('Speech recognition not supported in this browser.');
+      return;
+    }
+
+    // Create a FRESH instance every time - avoids all stale handler / accumulation bugs
+    const rec = new SpeechRecognition();
+    rec.continuous = false;
+    rec.interimResults = false;
+    rec.lang = 'en-US';
+    recognitionRef.current = rec;
     transcriptRef.current = '';
-    setInput(''); // Clear input box for a fresh recording session
-    setHasError(null);
-    try {
-      if (recognition) {
-        // Abort any existing recognition to reset the state
-        try { recognition.abort(); } catch (e) {}
-        
-        // Small delay to ensure the abort is processed by the browser
-        setTimeout(() => {
-          try {
-            recognition.start();
-            setIsListening(true);
-          } catch (err: any) {
-             setHasError(`Voice recognition busy. Please wait a moment: ${err.message}`);
-             setIsListening(false);
-          }
-        }, 50);
-      }
-    } catch (e: any) {
-      console.error('Recognition start error:', e);
+
+    rec.onstart = () => {
+      setIsListening(true);
+      setInput('');
+    };
+
+    rec.onresult = (event: any) => {
+      // fresh instance: results[0] is always the one and only result
+      const transcript = event.results[0]?.[0]?.transcript?.trim() || '';
+      transcriptRef.current = transcript;
+    };
+
+    rec.onerror = (event: any) => {
+      if (event.error === 'aborted' || event.error === 'no-speech') return;
       setIsListening(false);
-      
-      if (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError' || (e.message && e.message.includes('denied'))) {
-        setHasError('Microphone access denied. Please allow it in browser settings.');
-      } else if (e.name === 'InvalidStateError') {
-        setHasError('Recognition service is busy. Please try again.');
+      if (event.error === 'not-allowed') {
+        setHasError('Microphone access denied. Allow microphone in browser settings.');
       } else {
-        setHasError(`Speech start failed: ${e.message || 'Unknown error'}`);
+        setHasError(`Mic error: ${event.error}`);
       }
+    };
+
+    rec.onend = () => {
+      setIsListening(false);
+      const captured = transcriptRef.current.trim();
+      if (captured) {
+        // Auto-send directly to chat - no need to press send button
+        sendFn(captured);
+        transcriptRef.current = '';
+      }
+    };
+
+    try {
+      rec.start();
+    } catch (e: any) {
+      setHasError(`Could not start mic: ${e.message}`);
+      setIsListening(false);
     }
   };
 
   const stopListening = () => {
-    if (recognition && isListening) {
-      setIsListening(false);
-      
-      // Add haptic feedback for mobile
-      if ('vibrate' in navigator) {
-        navigator.vibrate([30, 30]);
-      }
-
-      try {
-        recognition.stop();
-      } catch (e) {}
-      
-      // Capture everything we have immediately (including interim if needed)
-      const finalTranscript = transcriptRef.current.trim();
-      if (finalTranscript) {
-        handleSend(finalTranscript);
-        transcriptRef.current = ''; 
-      }
+    if (recognitionRef.current && isListening) {
+      if ('vibrate' in navigator) navigator.vibrate([30, 30]);
+      try { recognitionRef.current.stop(); } catch (e) {}
+      // onend will fire automatically and call sendFn
     }
   };
 
-  useEffect(() => {
-    if (!recognition) return;
-
-    recognition.onresult = (event: any) => {
-      // With continuous=false, interimResults=false, we get ONE clean final result
-      const transcript = event.results[0][0].transcript.trim();
-      if (transcript) {
-        transcriptRef.current = transcript;
-        setInput(transcript);
-      }
-    };
-
-    recognition.onerror = (event: any) => {
-      if (event.error === 'aborted') return;
-      console.error('Speech recognition error:', event.error);
-      setIsListening(false);
-      
-      if (event.error === 'not-allowed') {
-        setHasError('Microphone access denied. Please allow it in browser settings.');
-      } else if (event.error === 'network') {
-        setHasError('Network connection issue. Please check your internet.');
-      } else if (event.error === 'no-speech') {
-        // Ignore
-      } else if (event.error === 'service-not-allowed') {
-        setHasError('This browser does not allow speech recognition on this site.');
-      } else {
-        setHasError(`Speech recognition error: ${event.error}`);
-      }
-    };
-
-    recognition.onend = () => {
-      setIsListening(false);
-    };
-  }, [isLoading, isSpeaking]); // Add dependencies to ensure the latest state is used
 
   const handleSend = async (text: string) => {
     if (!text.trim()) return;
