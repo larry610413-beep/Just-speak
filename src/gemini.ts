@@ -1,6 +1,9 @@
 import { GoogleGenAI, Content, Modality } from "@google/genai";
 
-let apiKey = (window as any).GEMINI_API_KEY || process.env.GEMINI_API_KEY || (import.meta as any).env?.VITE_GEMINI_API_KEY || '';
+let apiKey = (window as any).GEMINI_API_KEY 
+  || (typeof process !== 'undefined' && process?.env ? process.env.GEMINI_API_KEY : '') 
+  || (import.meta as any).env?.VITE_GEMINI_API_KEY 
+  || '';
 
 // If key is still missing, try to fetch it from the server
 if (!apiKey) {

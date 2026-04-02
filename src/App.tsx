@@ -256,7 +256,7 @@ export default function App() {
     isProcessingRef.current = true;
     
     const userMessage: Message = {
-      id: crypto.randomUUID(),
+      id: typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Math.random().toString(36).substring(2),
       role: 'user',
       content: text,
     };
@@ -266,7 +266,7 @@ export default function App() {
     setIsLoading(true);
     setHasError(null);
 
-    const assistantMessageId = crypto.randomUUID();
+    const assistantMessageId = typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Math.random().toString(36).substring(2);
     setMessages((prev) => [
       ...prev,
       { id: assistantMessageId, role: 'assistant', content: '' },
