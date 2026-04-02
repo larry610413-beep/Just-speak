@@ -29,8 +29,8 @@ const SpeechRecognition = (window as any).SpeechRecognition || (window as any).w
 const recognition = SpeechRecognition ? new SpeechRecognition() : null;
 
 if (recognition) {
-  recognition.continuous = false;
-  recognition.interimResults = false;
+  recognition.continuous = true;
+  recognition.interimResults = true;
   recognition.lang = 'en-US';
 }
 
@@ -257,11 +257,19 @@ export default function App() {
     if (!recognition) return;
 
     recognition.onresult = (event: any) => {
-      // ALWAYS capture the voice regardless of AI state
-      const transcript = event.results[0][0].transcript;
-      if (transcript.trim()) {
-        transcriptRef.current = transcript;
-        // Do NOT setInput(transcript) here
+      let interimTranscript = '';
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          transcriptRef.current = transcript;
+        } else {
+          interimTranscript += transcript;
+        }
+      }
+      
+      const finalVal = transcriptRef.current || interimTranscript;
+      if (finalVal.trim()) {
+        transcriptRef.current = finalVal;
       }
     };
 
@@ -401,25 +409,20 @@ export default function App() {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-[#F3F4F6] text-[#1F2937] font-sans">
+    <div className="flex flex-col h-screen bg-slate-950 text-slate-100 font-sans selection:bg-indigo-500/30">
       {/* Header */}
-      <header className="flex items-center justify-between px-6 py-4 bg-white border-b border-gray-200 shadow-sm">
-        <div className="flex items-center gap-2">
-          <div className="p-2 bg-indigo-600 rounded-lg shadow-md">
+      <header className="flex items-center justify-between px-6 py-4 bg-slate-900 border-b border-slate-800 shadow-2xl z-30">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 bg-indigo-600 rounded-2xl shadow-xl shadow-indigo-500/20">
             <Bot className="w-6 h-6 text-white" />
-          </div>
-          <div>
-            <h1 className="text-lg font-bold tracking-tight text-indigo-900 leading-tight">Just-speak</h1>
-            <p className="text-[10px] text-indigo-500 font-bold uppercase tracking-widest">AI English Coach</p>
           </div>
         </div>
         
-        {/* Unified Mode Toggle */}
         <button 
           onClick={() => setMode(mode === 'friendly' ? 'coach' : 'friendly')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all shadow-sm border ${
+          className={`flex items-center gap-2 px-4 py-2 rounded-2xl text-sm font-black transition-all shadow-xl border ${
             mode === 'friendly' 
-              ? 'bg-white border-indigo-100 text-indigo-600' 
+              ? 'bg-slate-800 border-slate-700 text-slate-100' 
               : 'bg-indigo-600 border-indigo-700 text-white'
           }`}
         >
@@ -439,7 +442,7 @@ export default function App() {
         <div className="flex items-center gap-4">
           <button
             onClick={() => setShowSettings(true)}
-            className="p-2 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 transition-all rounded-lg"
+            className="p-2.5 text-slate-400 hover:text-indigo-400 hover:bg-slate-800 transition-all rounded-2xl"
             title="Settings"
           >
             <Settings className="w-5 h-5" />
@@ -447,7 +450,7 @@ export default function App() {
           {messages.length > 0 && (
             <button
               onClick={() => setShowClearConfirm(true)}
-              className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 transition-all rounded-lg"
+              className="p-2.5 text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-all rounded-2xl"
               title="Clear History"
             >
               <Trash2 className="w-5 h-5" />
@@ -459,53 +462,56 @@ export default function App() {
       {/* Settings Modal */}
       <AnimatePresence>
         {showSettings && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
             <motion.div 
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl space-y-6"
+              className="bg-slate-900 border border-slate-800 rounded-[2.5rem] p-8 max-w-sm w-full shadow-2xl space-y-8 overflow-hidden relative"
             >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3 text-indigo-600">
-                  <div className="p-2 bg-indigo-50 rounded-lg">
+              <div className="absolute top-0 right-0 p-8 opacity-5">
+                <Settings className="w-32 h-32 text-indigo-500" />
+              </div>
+              <div className="flex items-center justify-between relative">
+                <div className="flex items-center gap-3 text-indigo-400">
+                  <div className="p-3 bg-indigo-500/10 rounded-2xl">
                     <Settings className="w-6 h-6" />
                   </div>
-                  <h3 className="text-xl font-bold">Preferences</h3>
+                  <h3 className="text-xl font-black tracking-tight">Preferences</h3>
                 </div>
                 <button 
                   onClick={() => setShowSettings(false)}
-                  className="p-2 text-gray-400 hover:text-gray-600 rounded-lg"
+                  className="p-3 text-slate-500 hover:text-slate-300 rounded-2xl hover:bg-slate-800 transition-all"
                 >
                   <Trash2 className="w-5 h-5 rotate-45 transform" /> 
                 </button>
               </div>
 
               <div className="space-y-4">
-                <div className="bg-gray-50 p-4 rounded-xl space-y-3">
+                <div className="bg-slate-800/50 p-6 rounded-3xl border border-slate-700/50 space-y-3 shadow-inner relative">
                   <div className="flex justify-between items-end">
                     <div>
-                      <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Daily Practice</p>
-                      <h4 className="text-lg font-bold text-gray-800">Usage Stats</h4>
+                      <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-1">Daily Practice</p>
+                      <h4 className="text-xl font-black text-slate-100 tracking-tight">Usage Stats</h4>
                     </div>
-                    <p className="text-sm font-bold text-indigo-600">{usage.count} / 1500</p>
+                    <p className="text-sm font-black text-indigo-400">{usage.count} <span className="text-slate-600">/ 1500</span></p>
                   </div>
                   
-                  <div className="h-2 w-full bg-gray-200 rounded-full overflow-hidden">
+                  <div className="h-3 w-full bg-slate-950 rounded-full overflow-hidden border border-slate-700/30">
                     <motion.div 
                       initial={{ width: 0 }}
                       animate={{ width: `${Math.min((usage.count / 1500) * 100, 100)}%` }}
-                      className="h-full bg-indigo-600"
+                      className="h-full bg-gradient-to-r from-indigo-600 to-indigo-400"
                     />
                   </div>
-                  <p className="text-[10px] text-gray-500 italic">Resets every 24 hours. Based on Gemini Free Tier limits.</p>
+                  <p className="text-[10px] text-slate-500 italic">Resets every 24 hours.</p>
                 </div>
 
                 {/* API Key Input */}
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-gray-600">
+                <div className="space-y-3 relative">
+                  <div className="flex items-center gap-2 text-slate-400">
                     <Key className="w-4 h-4" />
-                    <p className="text-xs font-bold uppercase tracking-wider">Gemini API Key</p>
+                    <p className="text-[10px] font-black uppercase tracking-widest">Gemini API Key</p>
                   </div>
                   <div className="flex flex-col gap-3">
                     <input 
@@ -513,40 +519,40 @@ export default function App() {
                       value={apiKey}
                       onChange={(e) => setApiKey(e.target.value)}
                       placeholder="Paste your key here..."
-                      className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm transition-all"
+                      className="w-full bg-slate-950 border border-slate-700 text-slate-100 px-5 py-4 rounded-3xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-sm transition-all placeholder:text-slate-700"
                     />
                     <button 
                       onClick={() => handleSaveKey(apiKey)}
-                      className={`w-full py-3 font-bold rounded-xl transition-all shadow-md ${
+                      className={`w-full py-4 font-black rounded-3xl transition-all shadow-xl ${
                         isKeySaved ? 'bg-green-600 text-white' : 'bg-indigo-600 text-white hover:bg-indigo-700'
                       }`}
                     >
-                      {isKeySaved ? '✓ Key Saved Successfully' : 'Save Key to Device'}
+                      {isKeySaved ? '✓ SAVED SUCCESSFULLY' : 'SAVE KEY TO DEVICE'}
                     </button>
                   </div>
-                  <p className="text-[10px] text-gray-400">Stored only on this device. Never shared with GitHub.</p>
+                  <p className="text-[10px] text-slate-600">Stored locally on your S24 Ultra.</p>
                 </div>
 
                 <a 
                   href="https://aistudio.google.com/app/plan_and_billing" 
                   target="_blank" 
                   rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-2 w-full py-3 px-4 bg-white border border-gray-200 hover:border-indigo-200 hover:bg-indigo-50 text-gray-600 text-sm font-bold rounded-xl transition-all"
+                  className="flex items-center justify-center gap-2 w-full py-4 px-4 bg-slate-950 border border-slate-700 hover:border-indigo-500/50 text-slate-400 text-[10px] font-black uppercase tracking-widest rounded-3xl transition-all"
                 >
-                  Check Cloud Dashboard
+                  Cloud Dashboard
                   <Sparkles className="w-4 h-4 text-indigo-500" />
                 </a>
               </div>
 
               <button 
                 onClick={() => setShowSettings(false)}
-                className="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition-all shadow-lg shadow-indigo-100"
+                className="w-full py-4 px-4 bg-slate-800 hover:bg-slate-700 text-slate-100 font-black rounded-3xl transition-all border border-slate-700 relative"
               >
-                Close
+                CLOSE
               </button>
 
-              <div className="text-center pt-2 border-t border-gray-100">
-                <p className="text-[10px] text-gray-300 font-bold tracking-widest uppercase">Version 1.0.1+DirectVoice</p>
+              <div className="text-center pt-2 border-t border-slate-800">
+                <p className="text-[10px] text-slate-700 font-black tracking-widest uppercase">Version 1.0.1+DirectVoice</p>
               </div>
             </motion.div>
           </div>
@@ -556,32 +562,32 @@ export default function App() {
       {/* Clear History Confirmation Modal */}
       <AnimatePresence>
         {showClearConfirm && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
             <motion.div 
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl space-y-4"
+              className="bg-slate-900 border border-red-500/20 rounded-[2.5rem] p-8 max-w-sm w-full shadow-2xl space-y-6"
             >
-              <div className="flex items-center gap-3 text-red-600">
-                <div className="p-2 bg-red-50 rounded-full">
+              <div className="flex items-center gap-3 text-red-400">
+                <div className="p-3 bg-red-500/10 rounded-2xl">
                   <Trash2 className="w-6 h-6" />
                 </div>
-                <h3 className="text-lg font-bold">Clear History?</h3>
+                <h3 className="text-xl font-black tracking-tight">Clear History?</h3>
               </div>
-              <p className="text-gray-600">This will permanently delete all your conversation history. Continue?</p>
-              <div className="flex gap-3 pt-2">
+              <p className="text-slate-400 text-sm leading-relaxed">This will permanently delete all your conversation history from this device. Continue?</p>
+              <div className="flex gap-4 pt-2">
                 <button 
                   onClick={() => setShowClearConfirm(false)}
-                  className="flex-1 py-3 px-4 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl transition-all"
+                  className="flex-1 py-4 px-4 bg-slate-800 hover:bg-slate-700 text-slate-300 font-black rounded-3xl transition-all border border-slate-700"
                 >
-                  Cancel
+                  CANCEL
                 </button>
                 <button 
                   onClick={handleClearHistory}
-                  className="flex-1 py-3 px-4 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition-all shadow-lg shadow-red-200"
+                  className="flex-1 py-4 px-4 bg-red-600 hover:bg-red-700 text-white font-black rounded-3xl transition-all shadow-2xl shadow-red-950"
                 >
-                  Clear All
+                  CLEAR ALL
                 </button>
               </div>
             </motion.div>
@@ -596,71 +602,62 @@ export default function App() {
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            className="bg-red-50 border-b border-red-100 px-6 py-4 flex flex-col gap-3 overflow-hidden"
+            className="bg-red-500/10 border-b border-red-500/20 px-6 py-6 flex flex-col gap-4 overflow-hidden z-20"
           >
-            <div className="flex items-start gap-3 text-red-700 text-sm">
-              <VolumeX className="w-5 h-5 flex-shrink-0 mt-0.5" />
+            <div className="flex items-start gap-3 text-red-400 text-sm">
+              <VolumeX className="w-6 h-6 flex-shrink-0" />
               <div className="space-y-2">
-                <p className="font-bold">{hasError}</p>
-                <div className="space-y-1 text-xs opacity-80">
-                  <p>How to fix:</p>
+                <p className="font-black uppercase tracking-tight">{hasError}</p>
+                <div className="space-y-1 text-xs opacity-60">
+                  <p>Troubleshooting:</p>
                   <ul className="list-disc list-inside space-y-1">
-                    <li>Click the lock icon in the address bar and allow Microphone access.</li>
-                    <li>If you are in a preview window, try opening in a new tab.</li>
-                    <li>Ensure your system settings also allow the browser access.</li>
+                    <li>Allow Microphone in address bar settings.</li>
+                    <li>Ensure you are in a secure context (HTTPS).</li>
                   </ul>
                 </div>
               </div>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-3">
               <button 
                 onClick={() => setHasError(null)}
-                className="px-3 py-1.5 bg-white border border-red-200 text-red-600 text-xs font-bold rounded-lg hover:bg-red-50 transition-all"
+                className="px-5 py-2.5 bg-slate-900 border border-slate-800 text-slate-300 text-[10px] font-black uppercase tracking-widest rounded-2xl hover:bg-slate-800 transition-all"
               >
                 Dismiss
               </button>
               <button 
                 onClick={() => { setHasError(null); setShowSettings(true); }}
-                className="px-3 py-1.5 bg-indigo-600 text-white text-xs font-bold rounded-lg hover:bg-indigo-700 transition-all shadow-sm"
+                className="px-5 py-2.5 bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest rounded-2xl hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-950"
               >
                 Set API Key
               </button>
-              {isIframe && (
-                <button 
-                  onClick={() => window.open(window.location.href, '_blank')}
-                  className="px-3 py-1.5 bg-red-600 text-white text-xs font-bold rounded-lg hover:bg-red-700 transition-all shadow-sm"
-                >
-                  Open in New Tab (Fix Permissions)
-                </button>
-              )}
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
       {/* Chat Area */}
-      <main className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6">
-        <div className="max-w-3xl mx-auto space-y-6">
+      <main className="flex-1 overflow-y-auto p-4 md:p-8 space-y-8 bg-slate-950">
+        <div className="max-w-3xl mx-auto space-y-8">
           {messages.length === 0 && (
             <motion.div 
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="flex flex-col items-center justify-center h-[50vh] text-center space-y-6"
+              className="flex flex-col items-center justify-center h-[50vh] text-center space-y-8"
             >
               <div className="relative">
-                <div className="p-8 bg-indigo-50 rounded-full shadow-inner">
-                  <Bot className="w-16 h-16 text-indigo-600" />
+                <div className="p-10 bg-indigo-500/5 rounded-[3rem] shadow-inner border border-indigo-500/10">
+                  <Bot className="w-16 h-16 text-indigo-500" />
                 </div>
                 <motion.div 
-                  animate={{ scale: [1, 1.3, 1], opacity: [0.5, 1, 0.5] }}
+                  animate={{ scale: [1, 1.3, 1], opacity: [0.3, 0.6, 0.3] }}
                   transition={{ repeat: Infinity, duration: 3 }}
-                  className="absolute -top-1 -right-1 w-5 h-5 bg-green-500 rounded-full border-4 border-white shadow-sm"
+                  className="absolute -top-2 -right-2 w-6 h-6 bg-green-500 rounded-full border-4 border-slate-950 shadow-2xl"
                 />
               </div>
-              <div className="space-y-3">
-                <h2 className="text-3xl font-extrabold text-gray-900 tracking-tight">Let's practice English!</h2>
-                <p className="text-gray-500 max-w-sm mx-auto text-lg leading-relaxed">
-                  I'm your AI partner. Choose <b>Friendly</b> for casual chat, or <b>Coach</b> for active corrections.
+              <div className="space-y-4">
+                <h2 className="text-4xl font-black text-slate-100 tracking-tight">Let's practice English</h2>
+                <p className="text-slate-500 max-w-sm mx-auto text-lg leading-relaxed font-medium">
+                  Tap the microphone and start speaking to your AI partner.
                 </p>
               </div>
             </motion.div>
@@ -670,32 +667,32 @@ export default function App() {
             {messages.map((message) => (
               <motion.div
                 key={message.id}
-                initial={{ opacity: 0, scale: 0.98, y: 10 }}
+                initial={{ opacity: 0, scale: 0.98, y: 15 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
-                <div className={`flex gap-3 max-w-[85%] ${message.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-                  <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center shadow-md ${
-                    message.role === 'user' ? 'bg-indigo-600' : 'bg-white border border-gray-200'
+                <div className={`flex gap-4 max-w-[90%] ${message.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
+                  <div className={`flex-shrink-0 w-10 h-10 rounded-2xl flex items-center justify-center shadow-2xl ${
+                    message.role === 'user' ? 'bg-indigo-600' : 'bg-slate-900 border border-slate-800'
                   }`}>
                     {message.role === 'user' ? (
                       <User className="w-6 h-6 text-white" />
                     ) : (
-                      <Bot className="w-6 h-6 text-indigo-600" />
+                      <Bot className="w-6 h-6 text-indigo-400" />
                     )}
                   </div>
-                  <div className={`p-4 rounded-2xl shadow-sm relative group ${
+                  <div className={`p-5 rounded-[2rem] shadow-2xl relative group ${
                     message.role === 'user' 
-                      ? 'bg-indigo-600 text-white rounded-tr-none' 
-                      : 'bg-white border border-gray-100 text-gray-800 rounded-tl-none'
+                      ? 'bg-indigo-600 text-white rounded-tr-none shadow-indigo-500/10' 
+                      : 'bg-slate-900 border border-slate-800 text-slate-100 rounded-tl-none shadow-black/20'
                   }`}>
-                    <p className="text-sm md:text-base whitespace-pre-wrap leading-relaxed font-medium">
+                    <p className="text-sm md:text-base whitespace-pre-wrap leading-relaxed font-semibold tracking-tight">
                       {message.content || (isLoading && message.role === 'assistant' ? 'Thinking...' : '')}
                     </p>
                     {message.role === 'assistant' && message.content && (
                       <button 
                         onClick={() => playResponse(message.content)}
-                        className="absolute -right-10 top-2 p-2 text-indigo-400 hover:text-indigo-600 transition-all opacity-0 group-hover:opacity-100"
+                        className="absolute -right-12 top-2 p-3 text-slate-600 hover:text-indigo-400 transition-all opacity-0 group-hover:opacity-100 bg-slate-900/50 rounded-2xl border border-slate-800"
                         title="Play Speech"
                       >
                         <Volume2 className="w-5 h-5" />
@@ -711,58 +708,58 @@ export default function App() {
       </main>
 
       {/* Voice Control Area */}
-      <footer className="p-4 md:p-6 bg-white border-t border-gray-200 shadow-2xl rounded-t-3xl">
-        <div className="max-w-3xl mx-auto flex flex-col items-center gap-6">
+      <footer className="p-6 md:p-10 bg-slate-900 border-t border-slate-800 shadow-2xl rounded-t-[3rem] z-20">
+        <div className="max-w-3xl mx-auto flex flex-col items-center gap-10">
           {/* Text Input Row */}
           <form 
             onSubmit={(e) => { e.preventDefault(); handleSend(input); }}
-            className="w-full flex gap-2"
+            className="w-full flex gap-3"
           >
             <input
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder={isListening ? "Listening..." : "Type a message..."}
-              className="flex-1 p-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm transition-all"
+              className="flex-1 p-4 bg-slate-950 border border-slate-700 rounded-[2rem] focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-slate-100 text-sm transition-all placeholder:text-slate-700"
               disabled={isLoading || isListening}
             />
             <button
               type="submit"
               disabled={isLoading || !input.trim() || isListening}
-              className="p-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:bg-gray-200 transition-all shadow-md"
+              className="p-4 bg-indigo-600 text-white rounded-2xl hover:bg-indigo-700 disabled:bg-slate-800 disabled:text-slate-600 transition-all shadow-xl shadow-indigo-950"
             >
-              <Send className="w-4 h-4" />
+              <Send className="w-5 h-5" />
             </button>
           </form>
 
           {/* Voice Button Row (Toggle Mode) */}
-          <div className="flex flex-col items-center gap-2 pb-2">
+          <div className="flex flex-col items-center gap-4 pb-4">
             <motion.button
               whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
+              whileTap={{ scale: 0.9 }}
               onClick={toggleListening}
               disabled={isLoading || isSpeaking}
-              className={`w-16 h-16 rounded-full flex items-center justify-center shadow-xl transition-all relative select-none touch-none ${
+              className={`w-24 h-24 rounded-full flex items-center justify-center shadow-2xl transition-all relative select-none touch-none ${
                 isListening 
-                  ? 'bg-red-500 text-white' 
-                  : (isLoading || isSpeaking) ? 'bg-gray-100 text-gray-300 cursor-not-allowed' : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                  ? 'bg-red-500 text-white shadow-red-500/40' 
+                  : (isLoading || isSpeaking) ? 'bg-slate-800 text-slate-600 cursor-not-allowed' : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-500/40'
               }`}
             >
               {isListening && (
                 <motion.div 
-                  animate={{ scale: [1, 1.5, 1], opacity: [0.5, 0, 0.5] }}
+                  animate={{ scale: [1, 1.8, 1], opacity: [0.4, 0, 0.4] }}
                   transition={{ repeat: Infinity, duration: 1.5 }}
                   className="absolute inset-0 bg-red-500 rounded-full"
                 />
               )}
-              <div className="relative z-10">
-                {isListening ? <MicOff className="w-7 h-7" /> : <Mic className="w-7 h-7" />}
+              <div className="relative z-10 scale-125">
+                {isListening ? <MicOff className="w-8 h-8" /> : <Mic className="w-8 h-8" />}
               </div>
             </motion.button>
             
             <div className="text-center h-4">
-              <p className={`text-[10px] font-bold uppercase tracking-wider transition-colors ${isListening ? 'text-red-500 animate-pulse' : 'text-gray-500'}`}>
-                {isListening ? 'TAP TO STOP' : isSpeaking ? 'AI SPEAKING' : isLoading ? 'THINKING' : 'TAP TO SPEAK'}
+              <p className={`text-[10px] font-black uppercase tracking-[0.25em] transition-colors ${isListening ? 'text-red-500 animate-pulse' : 'text-slate-600'}`}>
+                {isListening ? 'RECORDING' : isSpeaking ? 'AI SPEAKING' : isLoading ? 'THINKING' : 'TAP TO SPEAK'}
               </p>
             </div>
           </div>
