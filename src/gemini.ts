@@ -15,7 +15,9 @@ function getAIInstance(apiKey?: string) {
   if (!key) {
     throw new Error('An API Key must be provided.');
   }
-  return new GoogleGenAI(key);
+  // NEW: Version 1.29.0+ of @google/genai requires a configuration object
+  console.log('[DEBUG] AI Initializing with key length:', key.length);
+  return new GoogleGenAI({ apiKey: key });
 }
 
 export function hasValidKey() {
