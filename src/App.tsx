@@ -208,10 +208,16 @@ export default function App() {
 
   const attemptWebSpeechTTS = (text: string, resolve: () => void) => {
     const utterance = new SpeechSynthesisUtterance(text);
-    const voice = getBestVoice();
-    if (voice) utterance.voice = voice;
     
-    utterance.lang = 'en-US';
+    // 如果使用者選擇了「手機系統預設」，我們不要指定 voice 物件，直接讓 Android 作業系統接管
+    if (selectedVoiceURI === 'SYSTEM_DEFAULT') {
+      utterance.lang = 'en-US';
+    } else {
+      const voice = getBestVoice();
+      if (voice) utterance.voice = voice;
+      utterance.lang = 'en-US';
+    }
+    
     utterance.pitch = 1.0;
     utterance.rate = 0.95; 
 
@@ -583,13 +589,18 @@ export default function App() {
                         const synth = window.speechSynthesis;
                         synth.cancel();
                         const utterance = new SpeechSynthesisUtterance("Hi, nice to meet you.");
-                        const v = availableVoices.find(v => v.voiceURI === uri);
-                        if (v) utterance.voice = v;
+                        if (uri === 'SYSTEM_DEFAULT') {
+                          utterance.lang = 'en-US';
+                        } else {
+                          const v = availableVoices.find(v => v.voiceURI === uri);
+                          if (v) utterance.voice = v;
+                        }
                         synth.speak(utterance);
                       }}
                       className="w-full bg-slate-950 border border-slate-700 text-slate-100 px-5 py-4 rounded-3xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-sm transition-all appearance-none"
                     >
                       <option value="">Auto Select Best Voice</option>
+                      <option value="SYSTEM_DEFAULT">⭐ 手機系統預設 (套用你的 語音 III)</option>
                       {availableVoices.map((v) => (
                         <option key={v.voiceURI} value={v.voiceURI}>
                           {v.name} {v.localService ? '(Device)' : '(Online)'}
