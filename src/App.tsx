@@ -151,9 +151,14 @@ export default function App() {
   const getBestVoice = () => {
     const synth = window.speechSynthesis;
     const voices = synth.getVoices();
-    // Priority: Google US English > Microsoft David/Zira > any en-US
-    return voices.find(v => v.name.includes('Google US English')) ||
-           voices.find(v => v.name.includes('Microsoft David')) ||
+    // Priority: Premium iOS/Mac voices > Edge Natural > Google Network > Generic
+    return voices.find(v => v.name.includes('Samantha')) || // Premium iOS/Mac female
+           voices.find(v => v.name.includes('Alex')) || // Premium Mac male
+           voices.find(v => v.name.includes('Aria') && v.name.includes('Online')) || // Edge natural
+           voices.find(v => v.name.includes('Google') && v.name.includes('Network') && v.lang === 'en-US') || // Android Network
+           voices.find(v => v.name.includes('Google US English')) || // Android local fallback
+           voices.find(v => v.name.includes('Microsoft Zira')) || // Windows local
+           voices.find(v => v.lang === 'en-US' && !v.localService) || // Any network voice
            voices.find(v => v.lang === 'en-US') ||
            voices.find(v => v.lang.startsWith('en')) ||
            null;
