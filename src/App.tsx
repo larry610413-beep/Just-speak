@@ -16,6 +16,12 @@ interface Message {
 }
 
 const STORAGE_KEY = 'english_trainer_history';
+const USAGE_KEY = 'english_trainer_usage';
+
+interface UsageStats {
+  count: number;
+  lastReset: string; // ISO date string
+}
 
 // Speech Recognition setup
 const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -39,6 +45,8 @@ export default function App() {
   const [isIframe, setIsIframe] = useState(false);
   const [mode, setMode] = useState<ChatMode>('friendly');
   const [isGeneratingSpeech, setIsGeneratingSpeech] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [usage, setUsage] = useState<UsageStats>({ count: 0, lastReset: new Date().toISOString() });
   const transcriptRef = useRef('');
   const isProcessingRef = useRef(false);
   const audioQueueRef = useRef<string[]>([]);
@@ -69,6 +77,27 @@ export default function App() {
     } else {
       getChat([]);
     }
+    // Load usage stats
+    const savedUsage = localStorage.getItem(USAGE_KEY);
+    if (savedUsage) {
+      try {
+        const parsedUsage = JSON.parse(savedUsage) as UsageStats;
+        const lastReset = new Date(parsedUsage.lastReset);
+        const now = new Date();
+        
+        // Reset if it's a new day
+        if (lastReset.toDateString() !== now.toDateString()) {
+          const newUsage = { count: 0, lastReset: now.toISOString() };
+          setUsage(newUsage);
+          localStorage.setItem(USAGE_KEY, JSON.stringify(newUsage));
+        } else {
+          setUsage(parsedUsage);
+        }
+      } catch (e) {
+        console.error('Failed to parse usage stats', e);
+      }
+    }
+
     setIsInitialized(true);
   }, []);
 
@@ -146,7 +175,7 @@ export default function App() {
 
   const toggleListening = () => {
     if (!recognition) {
-      setHasError('您的瀏覽器不支援語音辨識。請使用 Chrome 或 Safari。');
+      setHasError('Your browser does not support Speech Recognition. Please use Google Chrome or Safari.');
       return;
     }
     
@@ -169,22 +198,30 @@ export default function App() {
     setHasError(null);
     try {
       if (recognition) {
-        recognition.start();
-        setIsListening(true);
+        // Abort any existing recognition to reset the state
+        try { recognition.abort(); } catch (e) {}
+        
+        // Small delay to ensure the abort is processed by the browser
+        setTimeout(() => {
+          try {
+            recognition.start();
+            setIsListening(true);
+          } catch (err: any) {
+             setHasError(`Voice recognition busy. Please wait a moment: ${err.message}`);
+             setIsListening(false);
+          }
+        }, 50);
       }
     } catch (e: any) {
       console.error('Recognition start error:', e);
       setIsListening(false);
       
-      // Handle different error types
       if (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError' || (e.message && e.message.includes('denied'))) {
-        setHasError('麥克風存取被拒絕。請確保您已允許瀏覽器使用麥克風。');
+        setHasError('Microphone access denied. Please allow it in browser settings.');
       } else if (e.name === 'InvalidStateError') {
-        // Recognition is already running, try to stop it first
-        try { recognition.stop(); } catch (err) {}
-        setHasError('語音辨識狀態異常，請稍候再試。');
+        setHasError('Recognition service is busy. Please try again.');
       } else {
-        setHasError(`語音辨識啟動失敗: ${e.message || '未知錯誤'}`);
+        setHasError(`Speech start failed: ${e.message || 'Unknown error'}`);
       }
     }
   };
@@ -233,15 +270,15 @@ export default function App() {
       setIsListening(false);
       
       if (event.error === 'not-allowed') {
-        setHasError('麥克風存取被拒絕。這通常是因為瀏覽器權限設定或在預覽視窗中被阻擋。');
+        setHasError('Microphone access denied. Please allow it in browser settings.');
       } else if (event.error === 'network') {
-        setHasError('網路連線問題，請檢查您的網路。');
+        setHasError('Network connection issue. Please check your internet.');
       } else if (event.error === 'no-speech') {
-        // Ignore no-speech errors to avoid annoying the user
+        // Ignore
       } else if (event.error === 'service-not-allowed') {
-        setHasError('此瀏覽器不允許在此網頁使用語音辨識服務。');
+        setHasError('This browser does not allow speech recognition on this site.');
       } else {
-        setHasError(`語音辨識錯誤: ${event.error}`);
+        setHasError(`Speech recognition error: ${event.error}`);
       }
     };
 
@@ -255,6 +292,12 @@ export default function App() {
 
     isProcessingRef.current = true;
     
+    // Update usage count
+    const newCount = usage.count + 1;
+    const newUsage = { ...usage, count: newCount };
+    setUsage(newUsage);
+    localStorage.setItem(USAGE_KEY, JSON.stringify(newUsage));
+
     const userMessage: Message = {
       id: typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Math.random().toString(36).substring(2),
       role: 'user',
@@ -306,7 +349,7 @@ export default function App() {
       }
     } catch (error: any) {
       console.error('Error sending message:', error);
-      let errorMessage = 'AI 連線暫時中斷，請稍後再試。';
+      let errorMessage = 'AI connection lost. Please try again.';
       
       try {
         const errorText = error?.message || '';
@@ -314,19 +357,19 @@ export default function App() {
           const jsonStart = errorText.indexOf('{');
           const jsonStr = errorText.substring(jsonStart);
           const parsed = JSON.parse(jsonStr);
-          errorMessage = parsed?.error?.message || parsed?.message || 'API 連線錯誤';
+          errorMessage = parsed?.error?.message || parsed?.message || 'API connection error';
         } else {
           errorMessage = errorText;
         }
       } catch (e) {
-        errorMessage = '無法解析 AI 回應，請檢查網路連線。';
+        errorMessage = 'Could not parse AI response. Check your connection.';
       }
 
-      // Translate common API errors to friendly Chinese
+      // Translate common API errors to English
       if (errorMessage.toLowerCase().includes('api key not valid')) {
-        errorMessage = '系統正在初始化 AI 金鑰，請重新整理網頁或稍候再試。';
+        errorMessage = 'Initializing AI key. Please refresh or wait a moment.';
       } else if (errorMessage.toLowerCase().includes('quota')) {
-        errorMessage = '目前使用人數較多，請稍等一分鐘後再試。';
+        errorMessage = 'System is busy (Quota reached). Please wait a minute.';
       }
 
       setMessages((prev) =>
@@ -379,6 +422,13 @@ export default function App() {
         </div>
 
         <div className="flex items-center gap-4">
+          <button
+            onClick={() => setShowSettings(true)}
+            className="p-2 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 transition-all rounded-lg"
+            title="Settings"
+          >
+            <Settings className="w-5 h-5" />
+          </button>
           {messages.length > 0 && (
             <button
               onClick={() => setShowClearConfirm(true)}
@@ -390,6 +440,73 @@ export default function App() {
           )}
         </div>
       </header>
+
+      {/* Settings Modal */}
+      <AnimatePresence>
+        {showSettings && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl space-y-6"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3 text-indigo-600">
+                  <div className="p-2 bg-indigo-50 rounded-lg">
+                    <Settings className="w-6 h-6" />
+                  </div>
+                  <h3 className="text-xl font-bold">Preferences</h3>
+                </div>
+                <button 
+                  onClick={() => setShowSettings(false)}
+                  className="p-2 text-gray-400 hover:text-gray-600 rounded-lg"
+                >
+                  <Trash2 className="w-5 h-5 rotate-45 transform" /> 
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div className="bg-gray-50 p-4 rounded-xl space-y-3">
+                  <div className="flex justify-between items-end">
+                    <div>
+                      <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Daily Practice</p>
+                      <h4 className="text-lg font-bold text-gray-800">Usage Stats</h4>
+                    </div>
+                    <p className="text-sm font-bold text-indigo-600">{usage.count} / 1500</p>
+                  </div>
+                  
+                  <div className="h-2 w-full bg-gray-200 rounded-full overflow-hidden">
+                    <motion.div 
+                      initial={{ width: 0 }}
+                      animate={{ width: `${Math.min((usage.count / 1500) * 100, 100)}%` }}
+                      className="h-full bg-indigo-600"
+                    />
+                  </div>
+                  <p className="text-[10px] text-gray-500 italic">Resets every 24 hours. Based on Gemini Free Tier limits.</p>
+                </div>
+
+                <a 
+                  href="https://aistudio.google.com/app/plan_and_billing" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2 w-full py-3 px-4 bg-white border border-gray-200 hover:border-indigo-200 hover:bg-indigo-50 text-gray-600 text-sm font-bold rounded-xl transition-all"
+                >
+                  Check Cloud Dashboard
+                  <Sparkles className="w-4 h-4 text-indigo-500" />
+                </a>
+              </div>
+
+              <button 
+                onClick={() => setShowSettings(false)}
+                className="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition-all shadow-lg shadow-indigo-100"
+              >
+                Close
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Clear History Confirmation Modal */}
       <AnimatePresence>
