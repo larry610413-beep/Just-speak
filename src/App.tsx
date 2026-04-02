@@ -505,19 +505,19 @@ export default function App() {
                     <Key className="w-4 h-4" />
                     <p className="text-xs font-bold uppercase tracking-wider">Gemini API Key</p>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-col gap-3">
                     <input 
                       type="password"
                       value={apiKey}
                       onChange={(e) => setApiKey(e.target.value)}
                       placeholder="Paste your key here..."
-                      className="flex-1 p-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm transition-all"
+                      className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm transition-all"
                     />
                     <button 
                       onClick={() => handleSaveKey(apiKey)}
-                      className="px-4 py-2 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-all shadow-md"
+                      className="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100"
                     >
-                      Save
+                      Save Key to Device
                     </button>
                   </div>
                   <p className="text-[10px] text-gray-400">Stored only on this device. Never shared with GitHub.</p>
