@@ -194,49 +194,8 @@ export default function App() {
 
   const playResponse = (text: string) => {
     return new Promise<void>((resolve) => {
-      setIsGeneratingSpeech(true);
-      generateSpeech(text).then(async (base64Audio) => {
-        if (base64Audio) {
-          try {
-            const audio = new Audio(`data:audio/mp3;base64,${base64Audio}`);
-            audio.onended = () => {
-              setIsSpeaking(false);
-              setIsGeneratingSpeech(false);
-              resolve();
-            };
-            audio.onerror = () => attemptGoogleTranslateTTS(text, resolve);
-            await audio.play();
-            setIsSpeaking(true);
-          } catch (e) {
-            console.error('Failed to play Gemini TTS', e);
-            attemptGoogleTranslateTTS(text, resolve);
-          }
-        } else {
-          attemptGoogleTranslateTTS(text, resolve);
-        }
-      }).catch(() => attemptGoogleTranslateTTS(text, resolve));
-    });
-  };
-
-  const attemptGoogleTranslateTTS = (text: string, resolve: () => void) => {
-    try {
-      const url = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=en-US&q=${encodeURIComponent(text)}`;
-      const audio = new Audio(url);
-      audio.onended = () => {
-        setIsSpeaking(false);
-        setIsGeneratingSpeech(false);
-        resolve();
-      };
-      audio.onerror = () => attemptWebSpeechTTS(text, resolve);
-      audio.play().then(() => {
-        setIsSpeaking(true);
-      }).catch((e) => {
-        console.error('Google Translate TTS failed, falling back to Web Speech', e);
-        attemptWebSpeechTTS(text, resolve);
-      });
-    } catch (e) {
       attemptWebSpeechTTS(text, resolve);
-    }
+    });
   };
 
   const attemptWebSpeechTTS = (text: string, resolve: () => void) => {
@@ -262,6 +221,7 @@ export default function App() {
     };
 
     setIsSpeaking(true);
+    setIsGeneratingSpeech(true);
     window.speechSynthesis.speak(utterance);
   };
 
@@ -436,19 +396,20 @@ export default function App() {
           )
         );
 
-        // Find complete sentences to queue for audio
-        const remainingText = fullResponse.substring(lastProcessedIndex);
-        // Faster sentence detection: include punctuation without requiring trailing space
-        const sentenceEndMatch = remainingText.match(/[.!?]/);
+        let remainingText = fullResponse.substring(lastProcessedIndex);
+        let sentenceEndMatch = remainingText.match(/[.!?]/);
         
-        if (sentenceEndMatch) {
+        while (sentenceEndMatch) {
           const endPos = sentenceEndMatch.index! + 1;
           const sentence = remainingText.substring(0, endPos).trim();
-          // Only queue if it's a "real" sentence (at least 2 chars or common words)
+          
           if (sentence.length > 1) {
             queueAudio(sentence);
-            lastProcessedIndex += endPos;
           }
+          
+          lastProcessedIndex += endPos;
+          remainingText = fullResponse.substring(lastProcessedIndex);
+          sentenceEndMatch = remainingText.match(/[.!?]/);
         }
       }
       
