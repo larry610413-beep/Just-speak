@@ -29,8 +29,9 @@ const SpeechRecognition = (window as any).SpeechRecognition || (window as any).w
 const recognition = SpeechRecognition ? new SpeechRecognition() : null;
 
 if (recognition) {
-  recognition.continuous = true;
-  recognition.interimResults = true;
+  // Non-continuous, no interim: mobile Chrome gives one clean final result
+  recognition.continuous = false;
+  recognition.interimResults = false;
   recognition.lang = 'en-US';
 }
 
@@ -258,17 +259,11 @@ export default function App() {
     if (!recognition) return;
 
     recognition.onresult = (event: any) => {
-      // CRITICAL: Only process NEW results from event.resultIndex
-      // Starting from 0 causes duplication on every interim update
-      let newText = '';
-      for (let i = event.resultIndex; i < event.results.length; ++i) {
-        newText += event.results[i][0].transcript;
-      }
-      if (newText.trim()) {
-        // Append to existing transcript instead of rebuilding from scratch
-        const updated = (transcriptRef.current + ' ' + newText).trim();
-        transcriptRef.current = updated;
-        setInput(updated);
+      // With continuous=false, interimResults=false, we get ONE clean final result
+      const transcript = event.results[0][0].transcript.trim();
+      if (transcript) {
+        transcriptRef.current = transcript;
+        setInput(transcript);
       }
     };
 
