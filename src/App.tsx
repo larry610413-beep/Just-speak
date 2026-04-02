@@ -152,85 +152,98 @@ export default function App() {
     const synth = window.speechSynthesis;
     const voices = synth.getVoices();
     
-    // First, strictly look for high-quality network voices
-    const networkVoice = voices.find(v => 
-      v.lang.startsWith('en') && 
-      (v.name.toLowerCase().includes('network') || v.name.toLowerCase().includes('online') || !v.localService)
-    );
-    if (networkVoice) return networkVoice;
+    // 找到所有美國英語的語音
+    const usVoices = voices.filter(v => v.lang === 'en-US' || v.lang === 'en_US');
+    
+    // 直接採用美國的第三個語音 (陣列索引 2)
+    if (usVoices.length >= 3) {
+      return usVoices[2];
+    }
+    
+    const isAndroid = /Android/i.test(navigator.userAgent);
+    if (isAndroid) {
+      return voices.find(v => v.default && v.lang.startsWith('en')) || null;
+    }
 
-    // Second, look for known premium OS voices
-    return voices.find(v => v.name.includes('Samantha')) || // Mac/iOS
-           voices.find(v => v.name.includes('Alex')) || // Mac
-           voices.find(v => v.name.includes('Aria')) || // Edge
-           voices.find(v => v.name.includes('Google US English')) || // Standard Android
-           voices.find(v => v.lang === 'en-US') ||
-           voices.find(v => v.lang.startsWith('en')) ||
+    // For iOS / Desktop fallback
+    return voices.find(v => v.name.includes('Samantha')) || 
+           voices.find(v => v.name.includes('Alex')) || 
+           voices.find(v => v.name.includes('Aria')) || 
+           usVoices[0] ||
            null;
   };
 
-  const playResponse = (text: string): Promise<void> => {
-    return new Promise((resolve) => {
-      if (!text.trim() || isGeneratingSpeech) {
-        resolve();
-        return;
-      }
-      
+  const playResponse = (text: string) => {
+    return new Promise<void>((resolve) => {
       setIsGeneratingSpeech(true);
-      try {
-        generateSpeech(text).then(async (base64Audio) => {
-          if (base64Audio) {
+      generateSpeech(text).then(async (base64Audio) => {
+        if (base64Audio) {
+          try {
             const audio = new Audio(`data:audio/mp3;base64,${base64Audio}`);
-            setIsSpeaking(true);
             audio.onended = () => {
               setIsSpeaking(false);
               setIsGeneratingSpeech(false);
               resolve();
             };
-            audio.onerror = () => {
-              setIsSpeaking(false);
-              setIsGeneratingSpeech(false);
-              resolve();
-            }
+            audio.onerror = () => attemptGoogleTranslateTTS(text, resolve);
             await audio.play();
-          } else {
-            // Fallback to browser TTS if Gemini TTS fails
-            const utterance = new SpeechSynthesisUtterance(text);
-            const voice = getBestVoice();
-            if (voice) utterance.voice = voice;
-            utterance.lang = 'en-US';
-            utterance.pitch = 1.0;
-            utterance.rate = 0.95; // Slightly slower for better clarity
-            
-            utterance.onstart = () => {
-              setIsSpeaking(true);
-              console.log('[DEBUG] AI Speaking:', text);
-            };
-            utterance.onend = () => {
-              setIsSpeaking(false);
-              setIsGeneratingSpeech(false);
-              console.log('[DEBUG] AI Finished Speaking');
-              resolve();
-            };
-            utterance.onerror = (e) => {
-              console.error('[DEBUG] TTS Error:', e);
-              setIsGeneratingSpeech(false);
-              setIsSpeaking(false);
-              resolve();
-            };
-            window.speechSynthesis.speak(utterance);
+            setIsSpeaking(true);
+          } catch (e) {
+            console.error('Failed to play Gemini TTS', e);
+            attemptGoogleTranslateTTS(text, resolve);
           }
-        }).catch(err => {
-          console.error('generateSpeech error:', err);
-          resolve();
-        });
-      } catch (err) {
-        console.error('Playback error:', err);
-        setIsGeneratingSpeech(false);
-        setIsSpeaking(false);
-        resolve();
-      }
+        } else {
+          attemptGoogleTranslateTTS(text, resolve);
+        }
+      }).catch(() => attemptGoogleTranslateTTS(text, resolve));
     });
+  };
+
+  const attemptGoogleTranslateTTS = (text: string, resolve: () => void) => {
+    try {
+      const url = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=en-US&q=${encodeURIComponent(text)}`;
+      const audio = new Audio(url);
+      audio.onended = () => {
+        setIsSpeaking(false);
+        setIsGeneratingSpeech(false);
+        resolve();
+      };
+      audio.onerror = () => attemptWebSpeechTTS(text, resolve);
+      audio.play().then(() => {
+        setIsSpeaking(true);
+      }).catch((e) => {
+        console.error('Google Translate TTS failed, falling back to Web Speech', e);
+        attemptWebSpeechTTS(text, resolve);
+      });
+    } catch (e) {
+      attemptWebSpeechTTS(text, resolve);
+    }
+  };
+
+  const attemptWebSpeechTTS = (text: string, resolve: () => void) => {
+    const utterance = new SpeechSynthesisUtterance(text);
+    const voice = getBestVoice();
+    if (voice) utterance.voice = voice;
+    
+    utterance.lang = 'en-US';
+    utterance.pitch = 1.0;
+    utterance.rate = 0.95; 
+
+    utterance.onend = () => {
+      setIsSpeaking(false);
+      setIsGeneratingSpeech(false);
+      resolve();
+    };
+
+    utterance.onerror = (e) => {
+      console.error('Speech synthesis error', e);
+      setIsSpeaking(false);
+      setIsGeneratingSpeech(false);
+      resolve();
+    };
+
+    setIsSpeaking(true);
+    window.speechSynthesis.speak(utterance);
   };
 
   const processAudioQueue = async () => {
