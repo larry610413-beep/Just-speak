@@ -139,11 +139,13 @@ export default function App() {
   const unlockAudio = () => {
     // Standard hack to unlock Web Speech API on mobile browsers
     const synth = window.speechSynthesis;
-    if (synth.speaking || synth.pending) return;
+    // Cancel any pending/stuck utterances first
+    synth.cancel();
     const utterance = new SpeechSynthesisUtterance(' ');
     utterance.volume = 0;
+    utterance.rate = 10; // Fast as possible
     synth.speak(utterance);
-    console.log('[DEBUG] Manual Unlock Called');
+    console.log('[DEBUG] Manual Unlock Triggered');
   };
 
   const getBestVoice = () => {
@@ -394,12 +396,14 @@ export default function App() {
 
         // Find complete sentences to queue for audio
         const remainingText = fullResponse.substring(lastProcessedIndex);
-        const sentenceEndMatch = remainingText.match(/[.!?]\s/);
+        // Faster sentence detection: include punctuation without requiring trailing space
+        const sentenceEndMatch = remainingText.match(/[.!?]/);
         
         if (sentenceEndMatch) {
-          const endPos = sentenceEndMatch.index! + sentenceEndMatch[0].length;
+          const endPos = sentenceEndMatch.index! + 1;
           const sentence = remainingText.substring(0, endPos).trim();
-          if (sentence) {
+          // Only queue if it's a "real" sentence (at least 2 chars or common words)
+          if (sentence.length > 1) {
             queueAudio(sentence);
             lastProcessedIndex += endPos;
           }
@@ -408,7 +412,7 @@ export default function App() {
       
       // Queue any remaining text
       const finalSentence = fullResponse.substring(lastProcessedIndex).trim();
-      if (finalSentence) {
+      if (finalSentence && finalSentence.length > 0) {
         queueAudio(finalSentence);
       }
     } catch (error: any) {
@@ -726,16 +730,16 @@ export default function App() {
                       ? 'bg-indigo-600 text-white rounded-tr-none shadow-indigo-500/10' 
                       : 'bg-slate-900 border border-slate-800 text-slate-100 rounded-tl-none shadow-black/20 pb-12'
                   }`}>
-                    <p className="text-sm md:text-base whitespace-pre-wrap leading-relaxed font-semibold tracking-tight">
+                    <p className="text-sm md:text-base whitespace-pre-wrap leading-relaxed font-semibold tracking-tight pr-2">
                       {message.content || (isLoading && message.role === 'assistant' ? 'Thinking...' : '')}
                     </p>
-                    {message.role === 'assistant' && message.content && (
+                    {message.role === 'assistant' && message.content && !message.content.startsWith('[System]') && (
                       <button 
                         onClick={() => playResponse(message.content)}
-                        className="absolute bottom-3 right-3 p-2.5 text-slate-500 hover:text-indigo-400 transition-all opacity-0 group-hover:opacity-100 bg-slate-950/50 rounded-xl border border-slate-800"
+                        className="absolute bottom-3 right-3 p-3 text-indigo-400 hover:text-indigo-300 transition-all bg-slate-950 rounded-2xl border border-slate-700 shadow-xl opacity-100 visible"
                         title="Play Speech"
                       >
-                        <Volume2 className="w-4 h-4" />
+                        <Volume2 className="w-5 h-5" />
                       </button>
                     )}
                   </div>

@@ -15,14 +15,12 @@ function getAIInstance(apiKey?: string) {
   if (!key) {
     throw new Error('An API Key must be provided.');
   }
-  // NEW: Version 1.29.0+ of @google/genai requires a configuration object
-  console.log('[DEBUG] AI Initializing with key length:', key.length);
+  // NEW: @google/genai 1.x uses a configuration object
   return new GoogleGenAI({ apiKey: key });
 }
 
 export function hasValidKey() {
   const key = getApiKey();
-  // Gemini Keys are usually long strings (e.g. 39+ chars starting with AIza)
   return !!key && key.length > 20;
 }
 
@@ -36,16 +34,23 @@ export type ChatMode = 'friendly' | 'coach';
 export async function* sendMessageStream(message: string, history: Content[] = [], mode: ChatMode = 'friendly', apiKey?: string) {
   const ai = getAIInstance(apiKey);
   
+  // Limit history to last 12 messages for performance
+  const limitedHistory = history.slice(-12);
+  
   const contents: Content[] = [
-    ...history,
+    ...limitedHistory,
     { role: 'user', parts: [{ text: message }] }
   ];
 
   const response = await ai.models.generateContentStream({
-    model: 'gemini-flash-latest',
+    model: 'gemini-1.5-flash',
     contents: contents,
     config: {
-      systemInstruction: INSTRUCTIONS[mode]
+      systemInstruction: INSTRUCTIONS[mode],
+      maxOutputTokens: 256,
+      temperature: 0.7,
+      topP: 0.8,
+      topK: 40,
     }
   });
 
