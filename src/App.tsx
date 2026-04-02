@@ -48,7 +48,10 @@ export default function App() {
   const [isGeneratingSpeech, setIsGeneratingSpeech] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [usage, setUsage] = useState<UsageStats>({ count: 0, lastReset: new Date().toISOString() });
-  const [apiKey, setApiKey] = useState(localStorage.getItem('english_trainer_api_key') || '');
+  const [apiKey, setApiKey] = useState(() => {
+    const saved = localStorage.getItem('english_trainer_api_key');
+    return (saved && saved.trim().length > 10) ? saved : '';
+  });
   const [isKeySaved, setIsKeySaved] = useState(false);
   const transcriptRef = useRef('');
   const isProcessingRef = useRef(false);
@@ -260,6 +263,8 @@ export default function App() {
       }
       if (fullTranscript.trim()) {
         transcriptRef.current = fullTranscript;
+        // Live feedback: update the input box as the user speaks
+        setInput(fullTranscript);
       }
     };
 
@@ -299,8 +304,9 @@ export default function App() {
     setInput('');
 
     // Pre-flight checks for the model
-    if (!hasValidKey()) {
-      setHasError('Missing Gemini API Key. Please add it in Settings.');
+    const currentKey = apiKey || localStorage.getItem('english_trainer_api_key') || '';
+    if (!currentKey || currentKey.length < 10) {
+      setHasError('Gemini API Key missing or too short. Click Settings (gear icon) to fix.');
       setShowSettings(true);
       return;
     }
@@ -331,7 +337,8 @@ export default function App() {
         parts: [{ text: m.content }]
       }));
 
-      const stream = sendMessageStream(userMessage.content, history, mode, apiKey);
+      const currentKey = apiKey || localStorage.getItem('english_trainer_api_key') || '';
+      const stream = sendMessageStream(userMessage.content, history, mode, currentKey);
       
       for await (const chunk of stream) {
         fullResponse += chunk;
@@ -401,14 +408,14 @@ export default function App() {
   return (
     <div className="flex flex-col h-screen bg-slate-950 text-slate-100 font-sans selection:bg-indigo-500/30">
       {/* Header */}
-      <header className="flex items-center justify-between px-6 py-6 bg-slate-900 border-b border-slate-800 shadow-2xl z-30">
+      <header className="flex-none flex items-center justify-between px-6 py-4 bg-slate-900 border-b border-slate-800 shadow-2xl z-20">
         <div className="flex items-center">
           <motion.div 
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            className="p-3 bg-indigo-600 rounded-[1.25rem] shadow-xl shadow-indigo-500/20"
+            className="p-2.5 bg-indigo-600 rounded-2xl shadow-xl shadow-indigo-500/20"
           >
-            <Bot className="w-6 h-6 text-white" />
+            <Bot className="w-5 h-5 text-white" />
           </motion.div>
         </div>
         
