@@ -152,25 +152,44 @@ export default function App() {
     const synth = window.speechSynthesis;
     const voices = synth.getVoices();
     
-    // 找到所有美國英語的語音
+    // 找出所有美國英語語音
     const usVoices = voices.filter(v => v.lang === 'en-US' || v.lang === 'en_US');
     
-    // 直接採用美國的第三個語音 (陣列索引 2)
+    // 優先尋找名稱中包含這幾個高品質發音的語音 (跨平台)
+    const premiumUSVoice = voices.find(v => 
+      v.name.includes('Samantha') || // iOS/Mac
+      v.name.includes('Aria') || // Edge
+      v.name.includes('Alex') || // Mac
+      v.name.includes('Google US English') // Android 高品質
+    );
+
+    if (premiumUSVoice) {
+      return premiumUSVoice;
+    }
+
+    // Android: 避開名稱太像機器的語音，試著找帶有 local 或 network 的較佳語音
+    const isAndroid = /Android/i.test(navigator.userAgent);
+    if (isAndroid && usVoices.length > 0) {
+       // 如果有明確的 Google 語音，優先選擇
+       const googleVoice = usVoices.find(v => v.name.toLowerCase().includes('google'));
+       if (googleVoice) return googleVoice;
+       
+       // 如果沒有，依序尋找：1. 網路語音(通常較自然但需網路) 2. 系統預設英文 3. 第三個美國語音(使用者原先要求)
+       const networkVoice = usVoices.find(v => !v.localService);
+       if (networkVoice) return networkVoice;
+
+       const defaultVoice = usVoices.find(v => v.default);
+       if (defaultVoice) return defaultVoice;
+
+       return usVoices.length >= 3 ? usVoices[2] : usVoices[0];
+    }
+
+    // fallback
     if (usVoices.length >= 3) {
       return usVoices[2];
     }
-    
-    const isAndroid = /Android/i.test(navigator.userAgent);
-    if (isAndroid) {
-      return voices.find(v => v.default && v.lang.startsWith('en')) || null;
-    }
 
-    // For iOS / Desktop fallback
-    return voices.find(v => v.name.includes('Samantha')) || 
-           voices.find(v => v.name.includes('Alex')) || 
-           voices.find(v => v.name.includes('Aria')) || 
-           usVoices[0] ||
-           null;
+    return usVoices[0] || null;
   };
 
   const playResponse = (text: string) => {
