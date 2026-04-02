@@ -720,20 +720,11 @@ export default function App() {
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
-                <div className={`flex gap-4 max-w-[90%] ${message.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-                  <div className={`flex-shrink-0 w-10 h-10 rounded-2xl flex items-center justify-center shadow-2xl ${
-                    message.role === 'user' ? 'bg-indigo-600' : 'bg-slate-900 border border-slate-800'
-                  }`}>
-                    {message.role === 'user' ? (
-                      <User className="w-6 h-6 text-white" />
-                    ) : (
-                      <Bot className="w-6 h-6 text-indigo-400" />
-                    )}
-                  </div>
-                  <div className={`p-5 rounded-[2rem] shadow-2xl relative group ${
+                <div className={`flex max-w-[95%] ${message.role === 'user' ? 'w-full justify-end' : 'w-full justify-start'}`}>
+                  <div className={`p-4 md:p-5 rounded-3xl shadow-2xl relative group ${
                     message.role === 'user' 
                       ? 'bg-indigo-600 text-white rounded-tr-none shadow-indigo-500/10' 
-                      : 'bg-slate-900 border border-slate-800 text-slate-100 rounded-tl-none shadow-black/20'
+                      : 'bg-slate-900 border border-slate-800 text-slate-100 rounded-tl-none shadow-black/20 pb-12'
                   }`}>
                     <p className="text-sm md:text-base whitespace-pre-wrap leading-relaxed font-semibold tracking-tight">
                       {message.content || (isLoading && message.role === 'assistant' ? 'Thinking...' : '')}
@@ -741,10 +732,10 @@ export default function App() {
                     {message.role === 'assistant' && message.content && (
                       <button 
                         onClick={() => playResponse(message.content)}
-                        className="absolute -right-12 top-2 p-3 text-slate-600 hover:text-indigo-400 transition-all opacity-0 group-hover:opacity-100 bg-slate-900/50 rounded-2xl border border-slate-800"
+                        className="absolute bottom-3 right-3 p-2.5 text-slate-500 hover:text-indigo-400 transition-all opacity-0 group-hover:opacity-100 bg-slate-950/50 rounded-xl border border-slate-800"
                         title="Play Speech"
                       >
-                        <Volume2 className="w-5 h-5" />
+                        <Volume2 className="w-4 h-4" />
                       </button>
                     )}
                   </div>
@@ -757,31 +748,31 @@ export default function App() {
       </main>
 
       {/* Voice Control Area */}
-      <footer className="flex-none p-4 md:p-5 bg-slate-900 border-t border-slate-800 shadow-2xl rounded-t-[2.5rem] z-20">
-        <div className="max-w-3xl mx-auto flex flex-col items-center gap-6">
+      <footer className="flex-none p-3 px-4 md:p-4 bg-slate-900 border-t border-slate-800 shadow-2xl rounded-t-[2rem] z-20">
+        <div className="max-w-3xl mx-auto flex flex-col items-center gap-4">
           {/* Text Input Row */}
           <form 
             onSubmit={(e) => { e.preventDefault(); handleSend(input); }}
-            className="w-full flex gap-3"
+            className="w-full flex gap-2"
           >
             <input
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder={isListening ? "[ Speaking... ]" : "Type a message..."}
-              className="flex-1 p-4 bg-slate-950 border border-slate-700 rounded-[2rem] focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-slate-100 text-sm transition-all placeholder:text-indigo-400 placeholder:animate-pulse"
+              className="flex-1 p-3.5 bg-slate-950 border border-slate-700 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-slate-100 text-sm transition-all shadow-inner"
               disabled={isLoading || isListening}
             />
             <button
               type="submit"
               disabled={isLoading || !input.trim() || isListening}
-              className="p-4 bg-indigo-600 text-white rounded-2xl hover:bg-indigo-700 disabled:bg-slate-800 disabled:text-slate-600 transition-all shadow-xl shadow-indigo-950"
+              className="p-3.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:bg-slate-800 disabled:text-slate-600 transition-all shadow-xl"
             >
               <Send className="w-5 h-5" />
             </button>
           </form>
 
-          <div className="flex flex-col items-center gap-3 pb-2">
+          <div className="flex items-center justify-center">
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.9 }}
@@ -804,12 +795,6 @@ export default function App() {
                 {isListening ? <MicOff className="w-8 h-8" /> : <Mic className="w-8 h-8" />}
               </div>
             </motion.button>
-            
-            <div className="text-center h-4">
-              <p className={`text-[10px] font-black uppercase tracking-[0.25em] transition-colors ${isListening ? 'text-red-500 animate-pulse' : 'text-slate-600'}`}>
-                {isListening ? 'RECORDING' : isSpeaking ? 'AI SPEAKING' : isLoading ? 'THINKING' : 'TAP TO SPEAK'}
-              </p>
-            </div>
           </div>
         </div>
       </footer>
