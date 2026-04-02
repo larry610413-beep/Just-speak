@@ -56,6 +56,17 @@ export default function App() {
   // Load history from local storage on mount
   useEffect(() => {
     setIsIframe(window.self !== window.top);
+    
+    // Preload voices for window.speechSynthesis
+    const synth = window.speechSynthesis;
+    const loadVoices = () => {
+      synth.getVoices();
+    };
+    if (synth.onvoiceschanged !== undefined) {
+      synth.onvoiceschanged = loadVoices;
+    }
+    loadVoices();
+
     const savedHistory = localStorage.getItem(STORAGE_KEY);
     if (savedHistory) {
       try {
@@ -91,6 +102,17 @@ export default function App() {
     }
 
     setIsInitialized(true);
+
+    // Strong unlock for mobile browsers: unlock on first tap
+    const strongUnlock = () => {
+      const synth = window.speechSynthesis;
+      const utterance = new SpeechSynthesisUtterance(' ');
+      utterance.volume = 0;
+      synth.speak(utterance);
+      console.log('[DEBUG] Strong Audio Unlocked');
+      window.removeEventListener('pointerdown', strongUnlock);
+    };
+    window.addEventListener('pointerdown', strongUnlock);
   }, []);
 
   // Save history to local storage whenever messages change
@@ -114,36 +136,89 @@ export default function App() {
     setShowClearConfirm(false);
   };
 
-  const playResponse = async (text: string) => {
-    if (!text.trim() || isGeneratingSpeech) return;
-    
-    setIsGeneratingSpeech(true);
-    try {
-      const base64Audio = await generateSpeech(text);
-      if (base64Audio) {
-        const audio = new Audio(`data:audio/mp3;base64,${base64Audio}`);
-        setIsSpeaking(true);
-        audio.onended = () => {
-          setIsSpeaking(false);
-          setIsGeneratingSpeech(false);
-        };
-        await audio.play();
-      } else {
-        // Fallback to browser TTS if Gemini TTS fails
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = 'en-US';
-        utterance.onstart = () => setIsSpeaking(true);
-        utterance.onend = () => {
-          setIsSpeaking(false);
-          setIsGeneratingSpeech(false);
-        };
-        window.speechSynthesis.speak(utterance);
+  const unlockAudio = () => {
+    // Standard hack to unlock Web Speech API on mobile browsers
+    const synth = window.speechSynthesis;
+    if (synth.speaking || synth.pending) return;
+    const utterance = new SpeechSynthesisUtterance(' ');
+    utterance.volume = 0;
+    synth.speak(utterance);
+    console.log('[DEBUG] Manual Unlock Called');
+  };
+
+  const getBestVoice = () => {
+    const synth = window.speechSynthesis;
+    const voices = synth.getVoices();
+    // Priority: Google US English > Microsoft David/Zira > any en-US
+    return voices.find(v => v.name.includes('Google US English')) ||
+           voices.find(v => v.name.includes('Microsoft David')) ||
+           voices.find(v => v.lang === 'en-US') ||
+           voices.find(v => v.lang.startsWith('en')) ||
+           null;
+  };
+
+  const playResponse = (text: string): Promise<void> => {
+    return new Promise((resolve) => {
+      if (!text.trim() || isGeneratingSpeech) {
+        resolve();
+        return;
       }
-    } catch (err) {
-      console.error('Playback error:', err);
-      setIsGeneratingSpeech(false);
-      setIsSpeaking(false);
-    }
+      
+      setIsGeneratingSpeech(true);
+      try {
+        generateSpeech(text).then(async (base64Audio) => {
+          if (base64Audio) {
+            const audio = new Audio(`data:audio/mp3;base64,${base64Audio}`);
+            setIsSpeaking(true);
+            audio.onended = () => {
+              setIsSpeaking(false);
+              setIsGeneratingSpeech(false);
+              resolve();
+            };
+            audio.onerror = () => {
+              setIsSpeaking(false);
+              setIsGeneratingSpeech(false);
+              resolve();
+            }
+            await audio.play();
+          } else {
+            // Fallback to browser TTS if Gemini TTS fails
+            const utterance = new SpeechSynthesisUtterance(text);
+            const voice = getBestVoice();
+            if (voice) utterance.voice = voice;
+            utterance.lang = 'en-US';
+            utterance.pitch = 1.0;
+            utterance.rate = 0.95; // Slightly slower for better clarity
+            
+            utterance.onstart = () => {
+              setIsSpeaking(true);
+              console.log('[DEBUG] AI Speaking:', text);
+            };
+            utterance.onend = () => {
+              setIsSpeaking(false);
+              setIsGeneratingSpeech(false);
+              console.log('[DEBUG] AI Finished Speaking');
+              resolve();
+            };
+            utterance.onerror = (e) => {
+              console.error('[DEBUG] TTS Error:', e);
+              setIsGeneratingSpeech(false);
+              setIsSpeaking(false);
+              resolve();
+            };
+            window.speechSynthesis.speak(utterance);
+          }
+        }).catch(err => {
+          console.error('generateSpeech error:', err);
+          resolve();
+        });
+      } catch (err) {
+        console.error('Playback error:', err);
+        setIsGeneratingSpeech(false);
+        setIsSpeaking(false);
+        resolve();
+      }
+    });
   };
 
   const processAudioQueue = async () => {
@@ -173,6 +248,7 @@ export default function App() {
   };
 
   const toggleListening = () => {
+    unlockAudio();
     if (!SpeechRecognition) {
       setHasError('Your browser does not support Speech Recognition. Please use Google Chrome or Samsung Internet.');
       return;
@@ -258,6 +334,7 @@ export default function App() {
 
   const handleSend = async (text: string) => {
     if (!text.trim()) return;
+    unlockAudio();
     // Prevent double-send (voice onend can fire unexpectedly twice on some Android browsers)
     if (isProcessingRef.current) return;
 
