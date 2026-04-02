@@ -258,6 +258,8 @@ export default function App() {
 
   const handleSend = async (text: string) => {
     if (!text.trim()) return;
+    // Prevent double-send (voice onend can fire unexpectedly twice on some Android browsers)
+    if (isProcessingRef.current) return;
 
     // Add user message to UI immediately no matter what
     const userMessage: Message = {
