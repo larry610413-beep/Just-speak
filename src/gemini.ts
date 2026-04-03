@@ -66,7 +66,7 @@ export async function generateSpeech(text: string, apiKey?: string): Promise<{ d
     const ai = getAIInstance(apiKey);
     
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-2.0-flash',
       contents: [{ role: 'user', parts: [{ text: `Say ONLY this text aloud, exactly as it is written: "${text}"` }] }],
       config: {
         responseModalities: ["AUDIO"],
