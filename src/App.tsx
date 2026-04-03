@@ -330,14 +330,15 @@ export default function App() {
         const geminiAudioResponse = item.audioPromise ? await item.audioPromise : await generateSpeech(item.text, currentKey);
         
         if (geminiAudioResponse) {
-          // 快取起來，下次按嗇叭直接用
+          // 快取起來，下次按喇叭直接用
           audioCacheRef.current.set(item.text, geminiAudioResponse);
           await playGeminiFromData(geminiAudioResponse);
           resolve();
           return;
         }
-        // Fallback
-        attemptWebSpeechTTS(item.text, resolve);
+        // Gemini 失敗時：不播放任何聲音（絕不偷偷切回機械音）
+        setIsGeneratingSpeech(false);
+        resolve();
         return;
       }
       attemptWebSpeechTTS(item.text, resolve);
