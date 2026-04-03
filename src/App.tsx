@@ -609,20 +609,39 @@ export default function App() {
                   <div className="flex flex-col gap-3">
                     <select 
                       value={selectedVoiceURI} 
-                      onChange={(e) => {
+                      onChange={async (e) => {
                         const uri = e.target.value;
                         setSelectedVoiceURI(uri);
                         localStorage.setItem('english_trainer_voice_uri', uri);
-                        const synth = window.speechSynthesis;
-                        synth.cancel();
-                        const utterance = new SpeechSynthesisUtterance("Hi, nice to meet you.");
-                        if (uri === 'SYSTEM_DEFAULT') {
-                          utterance.lang = 'en-US';
+                        
+                        // Preview logic
+                        if (uri === 'GEMINI_NATIVE') {
+                           const currentKey = apiKey || localStorage.getItem('english_trainer_api_key') || '';
+                           if (!currentKey) {
+                             setHasError("Please set API key first for Gemini Voice.");
+                             return;
+                           }
+                           setIsGeneratingSpeech(true);
+                           const base64Audio = await generateSpeech("Hi, nice to meet you.", currentKey);
+                           setIsGeneratingSpeech(false);
+                           if (base64Audio) {
+                             const audio = new Audio(`data:audio/mp3;base64,${base64Audio}`);
+                             audio.play().catch(e => console.error("Preview play failed", e));
+                           } else {
+                             console.error("Failed to generate preview from Gemini");
+                           }
                         } else {
-                          const v = availableVoices.find(v => v.voiceURI === uri);
-                          if (v) utterance.voice = v;
+                          const synth = window.speechSynthesis;
+                          synth.cancel();
+                          const utterance = new SpeechSynthesisUtterance("Hi, nice to meet you.");
+                          if (uri === 'SYSTEM_DEFAULT') {
+                            utterance.lang = 'en-US';
+                          } else {
+                            const v = availableVoices.find(v => v.voiceURI === uri);
+                            if (v) utterance.voice = v;
+                          }
+                          synth.speak(utterance);
                         }
-                        synth.speak(utterance);
                       }}
                       className="w-full bg-slate-950 border border-slate-700 text-slate-100 px-5 py-4 rounded-3xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-sm transition-all appearance-none"
                     >
