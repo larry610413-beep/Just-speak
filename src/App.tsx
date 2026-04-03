@@ -7,7 +7,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Send, Bot, User, Loader2, Sparkles, Trash2, Mic, MicOff, Volume2, VolumeX } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { sendMessageStream, generateSpeech, ChatMode } from './gemini';
-import { Settings, Shield, Coffee, Key } from 'lucide-react';
+import { Settings, Shield, Coffee, Key, Smile } from 'lucide-react';
 import { hasValidKey } from './gemini';
 
 interface Message {
@@ -645,22 +645,35 @@ export default function App() {
         </div>
         
         <button 
-          onClick={() => setMode(mode === 'friendly' ? 'coach' : 'friendly')}
+          onClick={() => {
+            if (mode === 'friendly') setMode('coach');
+            else if (mode === 'coach') setMode('kids');
+            else setMode('friendly');
+          }}
           className={`flex items-center gap-2 px-4 py-2 rounded-2xl text-sm font-black transition-all shadow-xl border ${
             mode === 'friendly' 
               ? 'bg-slate-800 border-slate-700 text-slate-100' 
-              : 'bg-indigo-600 border-indigo-700 text-white'
+              : mode === 'coach'
+              ? 'bg-indigo-600 border-indigo-700 text-white'
+              : 'bg-pink-600 border-pink-500 text-white shadow-pink-500/20'
           }`}
         >
-          {mode === 'friendly' ? (
+          {mode === 'friendly' && (
             <>
               <Coffee className="w-4 h-4" />
               <span>Friendly</span>
             </>
-          ) : (
+          )}
+          {mode === 'coach' && (
             <>
               <Shield className="w-4 h-4" />
               <span>Coach</span>
+            </>
+          )}
+          {mode === 'kids' && (
+            <>
+              <Smile className="w-4 h-4" />
+              <span>Kids</span>
             </>
           )}
         </button>
@@ -961,7 +974,7 @@ export default function App() {
                       ? 'bg-indigo-600 text-white rounded-tr-none shadow-indigo-500/10' 
                       : 'bg-slate-900 border border-slate-800 text-slate-100 rounded-tl-none shadow-black/20 pb-12'
                   }`}>
-                    <p className="text-sm md:text-base whitespace-pre-wrap leading-relaxed font-semibold tracking-tight pr-2">
+                    <p className="text-base md:text-lg whitespace-pre-wrap leading-relaxed font-semibold tracking-tight pr-2">
                       {message.content || (isLoading && message.role === 'assistant' ? 'Thinking...' : '')}
                     </p>
                     {message.role === 'assistant' && message.content && !message.content.startsWith('[System]') && (
