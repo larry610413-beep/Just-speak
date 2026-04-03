@@ -47,6 +47,8 @@ export default function App() {
   const [showDatabase, setShowDatabase] = useState(false);
   const [dbEnabled, setDbEnabled] = useState(() => localStorage.getItem('english_trainer_db_enabled') !== 'false');
   const [dbText, setDbText] = useState(() => localStorage.getItem('english_trainer_db_text') || '');
+  const [selectedText, setSelectedText] = useState('');
+  const [showAddSuccess, setShowAddSuccess] = useState(false);
   const [usage, setUsage] = useState<UsageStats>({ count: 0, lastReset: new Date().toISOString() });
   const [apiKey, setApiKey] = useState(() => {
     const saved = localStorage.getItem('english_trainer_api_key');
@@ -146,6 +148,24 @@ export default function App() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  useEffect(() => {
+    const handleSelectionChange = () => {
+      const selection = window.getSelection();
+      if (selection && selection.toString().trim().length > 0) {
+        setSelectedText(selection.toString().trim());
+      } else {
+        setTimeout(() => {
+          const checkSelection = window.getSelection();
+          if (!checkSelection || checkSelection.toString().trim().length === 0) {
+            setSelectedText('');
+          }
+        }, 200);
+      }
+    };
+    document.addEventListener('selectionchange', handleSelectionChange);
+    return () => document.removeEventListener('selectionchange', handleSelectionChange);
+  }, []);
 
   const handleClearHistory = () => {
     setMessages([]);
@@ -1094,6 +1114,56 @@ export default function App() {
           </AnimatePresence>
           <div ref={messagesEndRef} />
         </div>
+
+        {/* Floating Add to DB Button */}
+        <AnimatePresence>
+          {selectedText && (
+            <motion.div 
+              initial={{ opacity: 0, y: 20, scale: 0.9 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 10, scale: 0.9 }}
+              className="fixed bottom-36 md:bottom-40 left-0 right-0 z-40 flex justify-center pointer-events-none px-4"
+            >
+              <div className="pointer-events-auto">
+                <button
+                  onClick={() => {
+                    const newText = dbText ? dbText + '\n\n' + selectedText : selectedText;
+                    setDbText(newText);
+                    setDbEnabled(true);
+                    if (window.getSelection) {
+                      window.getSelection()?.removeAllRanges();
+                    }
+                    setSelectedText('');
+                    setShowAddSuccess(true);
+                    setTimeout(() => setShowAddSuccess(false), 2000);
+                  }}
+                  className="group flex flex-col items-center justify-center p-3 md:p-4 bg-indigo-600/95 backdrop-blur-md text-white rounded-3xl shadow-[0_10px_40px_rgba(79,70,229,0.5)] border border-indigo-400/50 hover:bg-indigo-500 transition-all active:scale-95"
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <Database className="w-5 h-5 text-indigo-200" />
+                    <span className="font-bold text-sm md:text-base tracking-wide">加入資料庫</span>
+                    <Plus className="w-4 h-4" />
+                  </div>
+                  <p className="text-xs text-indigo-200 w-48 md:w-64 truncate text-center font-medium opacity-90 select-none">"{selectedText}"</p>
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {showAddSuccess && (
+            <motion.div 
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="fixed top-24 left-1/2 -translate-x-1/2 z-50 bg-emerald-500 text-white px-6 py-3 rounded-full flex items-center gap-2 shadow-2xl font-bold text-sm tracking-wide pointer-events-none"
+            >
+              <Sparkles className="w-5 h-5" />
+              已存入資料庫！
+            </motion.div>
+          )}
+        </AnimatePresence>
       </main>
 
       {/* Voice Control Area */}
