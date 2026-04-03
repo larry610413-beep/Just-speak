@@ -52,6 +52,7 @@ export default function App() {
   const recognitionRef = useRef<any>(null);
   const isProcessingRef = useRef(false);
   const isPlayingQueueRef = useRef(false);
+  const audioCacheRef = useRef<Map<string, { data: string, mimeType: string }>>(new Map());
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Load history from local storage on mount
@@ -263,68 +264,79 @@ export default function App() {
     }
   };
 
+  const playGeminiFromData = (audioData: { data: string, mimeType: string }): Promise<void> => {
+    return new Promise((resolve) => {
+      try {
+        const mimeType = audioData.mimeType.toLowerCase();
+        const base64Data = audioData.data;
+
+        if (mimeType.includes('pcm') || mimeType.includes('l16')) {
+          const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+          const binaryString = window.atob(base64Data);
+          const len = binaryString.length;
+          const validLen = len % 2 === 0 ? len : len - 1;
+          const bytes = new Uint8Array(len);
+          for (let i = 0; i < len; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+          }
+          const int16Array = new Int16Array(bytes.buffer, 0, validLen / 2);
+          const float32Array = new Float32Array(int16Array.length);
+          for (let i = 0; i < int16Array.length; i++) {
+            float32Array[i] = int16Array[i] / 32768.0;
+          }
+          const buffer = audioCtx.createBuffer(1, float32Array.length, 24000);
+          buffer.getChannelData(0).set(float32Array);
+          const source = audioCtx.createBufferSource();
+          source.buffer = buffer;
+          source.connect(audioCtx.destination);
+          source.onended = () => {
+            setIsSpeaking(false);
+            setIsGeneratingSpeech(false);
+            resolve();
+          };
+          source.start();
+          setIsSpeaking(true);
+        } else {
+          const audioUrl = `data:${audioData.mimeType};base64,${base64Data}`;
+          const audio = new Audio(audioUrl);
+          audio.onended = () => {
+            setIsSpeaking(false);
+            setIsGeneratingSpeech(false);
+            resolve();
+          };
+          audio.onerror = () => resolve();
+          audio.play().catch(() => resolve());
+          setIsSpeaking(true);
+        }
+      } catch {
+        resolve();
+      }
+    });
+  };
+
   const playResponse = (item: { text: string; audioPromise: Promise<{ data: string, mimeType: string } | null> | null }) => {
     return new Promise<void>(async (resolve) => {
       if (selectedVoiceURI === 'GEMINI_NATIVE') {
+        // 先檢查快取：如果之前已經產生過這段語音，直接播放，不耗 API
+        const cached = audioCacheRef.current.get(item.text);
+        if (cached) {
+          await playGeminiFromData(cached);
+          resolve();
+          return;
+        }
+
         const currentKey = apiKey || localStorage.getItem('english_trainer_api_key') || '';
-        
-        // 使用預先下載好的 audio data（如果有的話）
         setIsGeneratingSpeech(true);
         const geminiAudioResponse = item.audioPromise ? await item.audioPromise : await generateSpeech(item.text, currentKey);
         
         if (geminiAudioResponse) {
-          try {
-            const mimeType = geminiAudioResponse.mimeType.toLowerCase();
-            const base64Data = geminiAudioResponse.data;
-
-            if (mimeType.includes('pcm') || mimeType.includes('l16')) {
-              const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-              const binaryString = window.atob(base64Data);
-              const len = binaryString.length;
-              const validLen = len % 2 === 0 ? len : len - 1;
-              const bytes = new Uint8Array(len);
-              for (let i = 0; i < len; i++) {
-                bytes[i] = binaryString.charCodeAt(i);
-              }
-              
-              const int16Array = new Int16Array(bytes.buffer, 0, validLen / 2);
-              const float32Array = new Float32Array(int16Array.length);
-              for (let i = 0; i < int16Array.length; i++) {
-                float32Array[i] = int16Array[i] / 32768.0;
-              }
-
-              const buffer = audioCtx.createBuffer(1, float32Array.length, 24000);
-              buffer.getChannelData(0).set(float32Array);
-
-              const source = audioCtx.createBufferSource();
-              source.buffer = buffer;
-              source.connect(audioCtx.destination);
-              source.onended = () => {
-                setIsSpeaking(false);
-                setIsGeneratingSpeech(false);
-                resolve();
-              };
-              source.start();
-              setIsSpeaking(true);
-              return;
-            } else {
-              const audioUrl = `data:${geminiAudioResponse.mimeType};base64,${base64Data}`;
-              const audio = new Audio(audioUrl);
-              audio.onended = () => {
-                setIsSpeaking(false);
-                setIsGeneratingSpeech(false);
-                resolve();
-              };
-              audio.onerror = () => attemptWebSpeechTTS(item.text, resolve);
-              await audio.play();
-              setIsSpeaking(true);
-              return;
-            }
-          } catch (e: any) {
-            console.error('Audio playback error:', e);
-          }
+          // 快取起來，下次按嗇叭直接用
+          audioCacheRef.current.set(item.text, geminiAudioResponse);
+          await playGeminiFromData(geminiAudioResponse);
+          resolve();
+          return;
         }
-        // Fallback if Gemini failed
+        // Fallback
         attemptWebSpeechTTS(item.text, resolve);
         return;
       }
