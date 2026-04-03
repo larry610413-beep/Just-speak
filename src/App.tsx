@@ -200,40 +200,77 @@ export default function App() {
     return usVoices[0] || null;
   };
 
+  const playGeminiAudio = async (text: string, currentKey: string, resolve: () => void, fallback: () => void) => {
+    setIsGeneratingSpeech(true);
+    const geminiAudioResponse = await generateSpeech(text, currentKey);
+    
+    if (!geminiAudioResponse) {
+      setHasError("Failed to fetch audio from Gemini API (Network/Key Error)");
+      fallback();
+      return;
+    }
+
+    try {
+      const mimeType = geminiAudioResponse.mimeType.toLowerCase();
+      const base64Data = geminiAudioResponse.data;
+
+      if (mimeType.includes('pcm')) {
+        const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const binaryString = window.atob(base64Data);
+        const len = binaryString.length;
+        const validLen = len % 2 === 0 ? len : len - 1; // Prevent odd-length buffer errors
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+        }
+        
+        const int16Array = new Int16Array(bytes.buffer, 0, validLen / 2);
+        const float32Array = new Float32Array(int16Array.length);
+        for (let i = 0; i < int16Array.length; i++) {
+            float32Array[i] = int16Array[i] / 32768.0;
+        }
+
+        const buffer = audioCtx.createBuffer(1, float32Array.length, 24000); 
+        buffer.getChannelData(0).set(float32Array);
+
+        const source = audioCtx.createBufferSource();
+        source.buffer = buffer;
+        source.connect(audioCtx.destination);
+        source.onended = () => {
+          setIsSpeaking(false);
+          setIsGeneratingSpeech(false);
+          resolve();
+        };
+        source.start();
+        setIsSpeaking(true);
+      } else {
+        const audioUrl = `data:${geminiAudioResponse.mimeType};base64,${base64Data}`;
+        const audio = new Audio(audioUrl);
+        audio.onended = () => {
+          setIsSpeaking(false);
+          setIsGeneratingSpeech(false);
+          resolve();
+        };
+        audio.onerror = (e) => {
+          setHasError("HTML Audio Player Error: Format not supported (" + mimeType + ")");
+          fallback(); 
+        };
+        await audio.play();
+        setIsSpeaking(true);
+      }
+    } catch (e: any) {
+      setHasError("Audio Processing Error: " + (e?.message || e?.toString() || "Unknown Error"));
+      fallback();
+    }
+  };
+
   const playResponse = (text: string) => {
     return new Promise<void>(async (resolve) => {
-      // 如果選擇的是頂級的 Gemini 雲端語音
       if (selectedVoiceURI === 'GEMINI_NATIVE') {
-        setIsGeneratingSpeech(true);
         const currentKey = apiKey || localStorage.getItem('english_trainer_api_key') || '';
-        const geminiAudioResponse = await generateSpeech(text, currentKey);
-        
-        if (geminiAudioResponse) {
-          try {
-            const audioUrl = `data:${geminiAudioResponse.mimeType};base64,${geminiAudioResponse.data}`;
-            const audio = new Audio(audioUrl);
-            audio.onended = () => {
-              setIsSpeaking(false);
-              setIsGeneratingSpeech(false);
-              resolve();
-            };
-            audio.onerror = (e) => {
-              console.error('Gemini audio decode error:', e);
-              attemptWebSpeechTTS(text, resolve); // Fallback on HTML decoding error
-            };
-            
-            await audio.play();
-            setIsSpeaking(true);
-            return;
-          } catch (e) {
-            console.error('Failed to play Gemini Cloud Voice', e);
-            attemptWebSpeechTTS(text, resolve);
-            return;
-          }
-        }
+        await playGeminiAudio(text, currentKey, resolve, () => attemptWebSpeechTTS(text, resolve));
+        return;
       }
-
-      // 如果不是選 Gemini 或是 Gemini 產生失敗，就用原本的網頁語音
       attemptWebSpeechTTS(text, resolve);
     });
   };
@@ -626,16 +663,11 @@ export default function App() {
                              setHasError("Please set API key first for Gemini Voice.");
                              return;
                            }
-                           setIsGeneratingSpeech(true);
-                           const geminiAudioResponse = await generateSpeech("Hi, nice to meet you.", currentKey);
-                           setIsGeneratingSpeech(false);
-                           if (geminiAudioResponse) {
-                             const audio = new Audio(`data:${geminiAudioResponse.mimeType};base64,${geminiAudioResponse.data}`);
-                             audio.play().catch(e => console.error("Preview play failed", e));
-                           } else {
-                             console.error("Failed to generate preview from Gemini");
-                             setHasError("無法取得 Gemini 語音，可能您的金鑰沒有開通此權限或是連線中斷。");
-                           }
+                           
+                           await playGeminiAudio("Hi, nice to meet you.", currentKey, () => {}, () => {
+                             setHasError("無法解析 Gemini 語音，可能您的金鑰沒有權限。");
+                           });
+                           
                         } else {
                           const synth = window.speechSynthesis;
                           synth.cancel();
