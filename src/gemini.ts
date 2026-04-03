@@ -63,31 +63,43 @@ export async function* sendMessageStream(message: string, history: Content[] = [
 
 export async function generateSpeech(text: string, apiKey?: string): Promise<{ data: string, mimeType: string } | null> {
   try {
-    const ai = getAIInstance(apiKey);
-    
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-preview-tts',
-      contents: [{ role: 'user', parts: [{ text: `Say ONLY this text aloud, exactly as it is written: "${text}"` }] }],
-      config: {
-        responseModalities: ["AUDIO"],
-        speechConfig: {
-          voiceConfig: {
-            prebuiltVoiceConfig: {
-              voiceName: "Aoede" // Aoede = Natural US Female, Puck = Natural US Male
+    const key = apiKey || getApiKey();
+    if (!key) throw new Error('No API key');
+
+    const model = 'gemini-2.5-flash-preview-tts';
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ role: 'user', parts: [{ text: `Say ONLY this text aloud, exactly as it is written: "${text}"` }] }],
+        generationConfig: {
+          responseModalities: ['AUDIO'],
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: { voiceName: 'Aoede' }
             }
           }
         }
-      }
+      })
     });
 
-    const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData != null);
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      console.error('Gemini TTS HTTP error:', response.status, errData);
+      return null;
+    }
+
+    const data = await response.json();
+    const part = data.candidates?.[0]?.content?.parts?.find((p: any) => p.inlineData != null);
     if (part && part.inlineData && part.inlineData.data) {
-      return { 
-        data: part.inlineData.data, 
-        mimeType: part.inlineData.mimeType || 'audio/wav' 
+      return {
+        data: part.inlineData.data,
+        mimeType: part.inlineData.mimeType || 'audio/L16;codec=pcm;rate=24000'
       };
     }
-    
+
     return null;
   } catch (error) {
     console.error('Gemini TTS API failed:', error);
