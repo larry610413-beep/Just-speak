@@ -927,13 +927,7 @@ export default function App() {
               exit={{ scale: 0.9, opacity: 0 }}
               className="bg-slate-900 border border-slate-800 rounded-[2.5rem] p-6 md:p-8 max-w-lg w-full shadow-2xl flex flex-col h-[70vh] relative"
             >
-              <div className="flex items-center justify-between relative mb-6">
-                <div className="flex items-center gap-3 text-indigo-400">
-                  <div className="p-3 bg-indigo-500/10 rounded-2xl">
-                    <Database className="w-6 h-6" />
-                  </div>
-                  <h3 className="text-xl font-black tracking-tight">Learning DB</h3>
-                </div>
+              <div className="flex items-center justify-end relative mb-6">
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => {
