@@ -61,13 +61,13 @@ export async function* sendMessageStream(message: string, history: Content[] = [
   }
 }
 
-export async function generateSpeech(text: string, apiKey?: string): Promise<string | null> {
+export async function generateSpeech(text: string, apiKey?: string): Promise<{ data: string, mimeType: string } | null> {
   try {
     const ai = getAIInstance(apiKey);
     
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
-      contents: [{ role: 'user', parts: [{ text: `Read this text aloud exactly as it is, with no added words or commentary: "${text}"` }] }],
+      contents: [{ role: 'user', parts: [{ text: `Say ONLY this text aloud, exactly as it is written: "${text}"` }] }],
       config: {
         responseModalities: ["AUDIO"],
         speechConfig: {
@@ -80,10 +80,12 @@ export async function generateSpeech(text: string, apiKey?: string): Promise<str
       }
     });
 
-    // Extract the base64 audio data from the response inlineData
     const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData != null);
     if (part && part.inlineData && part.inlineData.data) {
-      return part.inlineData.data;
+      return { 
+        data: part.inlineData.data, 
+        mimeType: part.inlineData.mimeType || 'audio/wav' 
+      };
     }
     
     return null;

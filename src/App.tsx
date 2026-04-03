@@ -206,17 +206,22 @@ export default function App() {
       if (selectedVoiceURI === 'GEMINI_NATIVE') {
         setIsGeneratingSpeech(true);
         const currentKey = apiKey || localStorage.getItem('english_trainer_api_key') || '';
-        const base64Audio = await generateSpeech(text, currentKey);
+        const geminiAudioResponse = await generateSpeech(text, currentKey);
         
-        if (base64Audio) {
+        if (geminiAudioResponse) {
           try {
-            const audio = new Audio(`data:audio/mp3;base64,${base64Audio}`);
+            const audioUrl = `data:${geminiAudioResponse.mimeType};base64,${geminiAudioResponse.data}`;
+            const audio = new Audio(audioUrl);
             audio.onended = () => {
               setIsSpeaking(false);
               setIsGeneratingSpeech(false);
               resolve();
             };
-            audio.onerror = () => attemptWebSpeechTTS(text, resolve); // Fallback on error
+            audio.onerror = (e) => {
+              console.error('Gemini audio decode error:', e);
+              attemptWebSpeechTTS(text, resolve); // Fallback on HTML decoding error
+            };
+            
             await audio.play();
             setIsSpeaking(true);
             return;
@@ -622,13 +627,14 @@ export default function App() {
                              return;
                            }
                            setIsGeneratingSpeech(true);
-                           const base64Audio = await generateSpeech("Hi, nice to meet you.", currentKey);
+                           const geminiAudioResponse = await generateSpeech("Hi, nice to meet you.", currentKey);
                            setIsGeneratingSpeech(false);
-                           if (base64Audio) {
-                             const audio = new Audio(`data:audio/mp3;base64,${base64Audio}`);
+                           if (geminiAudioResponse) {
+                             const audio = new Audio(`data:${geminiAudioResponse.mimeType};base64,${geminiAudioResponse.data}`);
                              audio.play().catch(e => console.error("Preview play failed", e));
                            } else {
                              console.error("Failed to generate preview from Gemini");
+                             setHasError("無法取得 Gemini 語音，可能您的金鑰沒有開通此權限或是連線中斷。");
                            }
                         } else {
                           const synth = window.speechSynthesis;
