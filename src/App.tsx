@@ -4,10 +4,10 @@
  */
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Loader2, Sparkles, Trash2, Mic, MicOff, Volume2, VolumeX } from 'lucide-react';
+import { Send, Bot, User, Loader2, Sparkles, Trash2, Mic, MicOff, Volume2, VolumeX, Plus } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { sendMessageStream, generateSpeech, ChatMode, generateSuggestion } from './gemini';
-import { Settings, Shield, Coffee, Key, Smile, Lightbulb } from 'lucide-react';
+import { sendMessageStream, generateSpeech, ChatMode, generateSuggestion, DatabaseItem } from './gemini';
+import { Settings, Shield, Coffee, Key, Smile, Lightbulb, Database } from 'lucide-react';
 import { hasValidKey } from './gemini';
 
 interface Message {
@@ -41,6 +41,16 @@ export default function App() {
   const [isGeneratingSpeech, setIsGeneratingSpeech] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [suggestion, setSuggestion] = useState('');
+  const [hintEnabled, setHintEnabled] = useState(true);
+  const hintEnabledRef = useRef(hintEnabled);
+  useEffect(() => { hintEnabledRef.current = hintEnabled; }, [hintEnabled]);
+  const [showDatabase, setShowDatabase] = useState(false);
+  const [dbItems, setDbItems] = useState<DatabaseItem[]>(() => {
+    const saved = localStorage.getItem('english_trainer_db');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [dbInput, setDbInput] = useState('');
+  const [dbType, setDbType] = useState<'word'|'phrase'|'article'>('word');
   const [usage, setUsage] = useState<UsageStats>({ count: 0, lastReset: new Date().toISOString() });
   const [apiKey, setApiKey] = useState(() => {
     const saved = localStorage.getItem('english_trainer_api_key');
@@ -125,6 +135,22 @@ export default function App() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
     }
   }, [messages, isInitialized]);
+
+  useEffect(() => {
+    if (isInitialized) {
+      localStorage.setItem('english_trainer_db', JSON.stringify(dbItems));
+    }
+  }, [dbItems, isInitialized]);
+  
+  const handleAddDbItem = () => {
+    if (!dbInput.trim()) return;
+    setDbItems(prev => [...prev, { id: Math.random().toString(36).substring(2), type: dbType, content: dbInput.trim() }]);
+    setDbInput('');
+  };
+  
+  const handleDeleteDbItem = (id: string) => {
+    setDbItems(prev => prev.filter(i => i.id !== id));
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -552,7 +578,7 @@ export default function App() {
       }));
 
       const currentKey = apiKey || localStorage.getItem('english_trainer_api_key') || '';
-      const stream = sendMessageStream(userMessage.content, history, mode, currentKey);
+      const stream = sendMessageStream(userMessage.content, history, mode, currentKey, dbItems);
       
       for await (const chunk of stream) {
         fullResponse += chunk;
@@ -596,14 +622,16 @@ export default function App() {
         }
       }
 
-      // Fetch suggestion asynchronously
-      const newHistory = [
-        ...history,
-        { role: 'model', parts: [{ text: fullResponse }] }
-      ];
-      generateSuggestion(newHistory as any[], mode, currentKey).then((hint) => {
-        setSuggestion(hint);
-      });
+      // Fetch suggestion asynchronously if enabled
+      if (hintEnabledRef.current) {
+        const newHistory = [
+          ...history,
+          { role: 'model', parts: [{ text: fullResponse }] }
+        ];
+        generateSuggestion(newHistory as any[], mode, currentKey).then((hint) => {
+          setSuggestion(hint);
+        });
+      }
     } catch (error: any) {
       console.error('Error sending message:', error);
       let errorMessage = 'AI connection lost. Please try again.';
@@ -647,13 +675,15 @@ export default function App() {
       {/* Header */}
       <header className="flex-none flex items-center justify-between px-6 py-4 bg-slate-900 border-b border-slate-800 shadow-2xl z-20">
         <div className="flex items-center">
-          <motion.div 
+          <motion.button 
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            className="p-2.5 bg-indigo-600 rounded-2xl shadow-xl shadow-indigo-500/20"
+            onClick={() => setShowDatabase(true)}
+            className="p-2.5 bg-indigo-600 rounded-2xl shadow-xl shadow-indigo-500/20 flex items-center justify-center cursor-pointer hover:bg-indigo-500 transition-colors"
+            title="Learning Database"
           >
-            <Bot className="w-5 h-5 text-white" />
-          </motion.div>
+            <Database className="w-5 h-5 text-white" />
+          </motion.button>
         </div>
         
         <button 
@@ -867,6 +897,96 @@ export default function App() {
           </div>
         )}
       </AnimatePresence>
+      
+      {/* Database Modal */}
+      <AnimatePresence>
+        {showDatabase && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-slate-900 border border-slate-800 rounded-[2.5rem] p-6 md:p-8 max-w-lg w-full shadow-2xl flex flex-col max-h-[90vh] overflow-hidden relative"
+            >
+              <div className="flex items-center justify-between relative mb-6">
+                <div className="flex items-center gap-3 text-indigo-400">
+                  <div className="p-3 bg-indigo-500/10 rounded-2xl">
+                    <Database className="w-6 h-6" />
+                  </div>
+                  <h3 className="text-xl font-black tracking-tight">Learning DB</h3>
+                </div>
+                <button 
+                  onClick={() => setShowDatabase(false)}
+                  className="p-3 text-slate-500 hover:text-slate-300 rounded-2xl hover:bg-slate-800 transition-all font-black text-xl leading-none"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="flex gap-2 mb-4 bg-slate-950 p-1.5 rounded-2xl border border-slate-800">
+                {(['word', 'phrase', 'article'] as const).map(type => (
+                  <button
+                    key={type}
+                    onClick={() => setDbType(type)}
+                    className={`flex-1 py-2 text-xs font-black uppercase tracking-widest rounded-xl transition-all ${dbType === type ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800'}`}
+                  >
+                    {type === 'article' ? 'Sentence' : type}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex gap-2 mb-6">
+                <input 
+                  type="text"
+                  value={dbInput}
+                  onChange={(e) => setDbInput(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleAddDbItem()}
+                  placeholder={`Add a new ${dbType === 'article' ? 'sentence/article' : dbType}...`}
+                  className="flex-1 bg-slate-950 border border-slate-700 text-slate-100 px-4 py-3 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-sm placeholder:text-slate-700"
+                />
+                <button 
+                  onClick={handleAddDbItem}
+                  disabled={!dbInput.trim()}
+                  className="p-3 bg-indigo-600 text-white rounded-2xl hover:bg-indigo-700 disabled:bg-slate-800 disabled:text-slate-600 transition-all shadow-xl"
+                >
+                  <Plus className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto space-y-2 pr-2" style={{scrollbarWidth: 'thin', scrollbarColor: '#4f46e5 transparent'}}>
+                {dbItems.length === 0 ? (
+                    <div className="text-center py-10 opacity-50 flex flex-col items-center">
+                        <Database className="w-12 h-12 mb-4 text-slate-600" />
+                        <p className="text-sm font-semibold tracking-tight">Database is empty</p>
+                        <p className="text-xs mt-1 text-slate-500">AI will use items added here in conversations</p>
+                    </div>
+                ) : (
+                    dbItems.map(item => (
+                        <div key={item.id} className="flex items-center justify-between gap-3 p-4 bg-slate-800/40 rounded-2xl border border-slate-700/50 group">
+                            <div className="flex-1 min-w-0">
+                                <span className={`text-[10px] uppercase font-black tracking-widest px-2 py-0.5 rounded-full mr-2 ${
+                                    item.type === 'word' ? 'bg-amber-500/20 text-amber-400' :
+                                    item.type === 'phrase' ? 'bg-emerald-500/20 text-emerald-400' :
+                                    'bg-sky-500/20 text-sky-400'
+                                }`}>
+                                    {item.type}
+                                </span>
+                                <span className="text-sm text-slate-200 break-words">{item.content}</span>
+                            </div>
+                            <button 
+                                onClick={() => handleDeleteDbItem(item.id)}
+                                className="p-2 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-all"
+                            >
+                                <Trash2 className="w-4 h-4" />
+                            </button>
+                        </div>
+                    ))
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Clear History Confirmation Modal */}
       <AnimatePresence>
@@ -1047,15 +1167,28 @@ export default function App() {
                         setSuggestion('');
                     }}
                   >
-                    <Lightbulb className="w-5 h-5 md:w-6 md:h-6 flex-shrink-0 text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.8)]" />
                     <p className="text-xs md:text-sm font-semibold tracking-tight leading-relaxed select-none">{suggestion}</p>
                   </motion.div>
                 )}
               </AnimatePresence>
             </div>
 
-            {/* Right side: Mic Button */}
-            <div className="flex-none">
+            {/* Right side: Toggles & Mic Button */}
+            <div className="flex-none flex items-center gap-3">
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.9 }}
+                onClick={() => { setHintEnabled(!hintEnabled); setSuggestion(''); }}
+                className={`p-3 md:p-3.5 rounded-full transition-all border ${
+                    hintEnabled 
+                    ? 'bg-amber-500/20 text-amber-400 border-amber-500/50 shadow-[0_0_15px_rgba(251,191,36,0.2)]' 
+                    : 'bg-slate-800 text-slate-500 border-slate-700 hover:text-slate-400'
+                }`}
+                title="Toggle AI Suggestions"
+              >
+                <Lightbulb className="w-5 h-5 md:w-6 md:h-6" />
+              </motion.button>
+              
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.9 }}

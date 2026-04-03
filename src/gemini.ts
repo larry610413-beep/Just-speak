@@ -25,14 +25,20 @@ export function hasValidKey() {
 }
 
 const INSTRUCTIONS = {
-  friendly: "You are a friendly companion. Your goal is to have a natural, casual conversation in English. Check in on the user's day, be supportive, and keep the vibe light. Do NOT correct their grammar unless it's completely unintelligible. Just chat like a real friend. Keep your responses extremely short and concise (limit to 1-2 simple sentences) so you can reply quickly.",
-  coach: "You are an expert English Speaking Coach. Your goal is to help the user speak like a native American. Actively correct their grammar, suggest more natural idioms, and provide feedback on how to say things better in a professional but encouraging way. Keep your responses extremely short and concise (limit to 1-2 simple sentences) so you can reply quickly.",
+  friendly: "You are a friendly companion for an adult user. Your goal is to have a natural, casual conversation in English. Check in on their day, ask about their work, current events, recent news, or anything special that happened recently. Keep the vibe light and relatable. Do NOT correct their grammar unless it's unintelligible. Just chat like a real friend. Keep your responses extremely short and concise (limit to 1-2 simple sentences) so you can reply quickly.",
+  coach: "You are an expert English Speaking Coach helping an adult professional. Your goal is to help the user speak like a native American. Actively correct their grammar and suggest more natural idioms in a professional but encouraging way. To keep the conversation engaging, ask questions about their work status, recent news, current events, or their daily life. Keep your responses extremely short and concise (limit to 1-2 simple sentences) so you can reply quickly.",
   kids: "You are a fun and friendly chat buddy for a 10-year-old child. Have a simple, engaging English conversation suitable for kids aged 7 to 12. Talk about fun topics like school, games, animals, or friends. Use very simple basic vocabulary and easy-to-understand grammatical structures. Keep your responses extremely short and concise (limit to 1-2 simple sentences) so you can reply quickly."
 };
 
 export type ChatMode = 'friendly' | 'coach' | 'kids';
 
-export async function* sendMessageStream(message: string, history: Content[] = [], mode: ChatMode = 'friendly', apiKey?: string) {
+export interface DatabaseItem {
+  id: string;
+  type: 'word' | 'phrase' | 'article';
+  content: string;
+}
+
+export async function* sendMessageStream(message: string, history: Content[] = [], mode: ChatMode = 'friendly', apiKey?: string, dbItems: DatabaseItem[] = []) {
   const ai = getAIInstance(apiKey);
   
   // Limit history to last 12 messages for performance
@@ -43,17 +49,51 @@ export async function* sendMessageStream(message: string, history: Content[] = [
     { role: 'user', parts: [{ text: message }] }
   ];
 
-  const response = await ai.models.generateContentStream({
-    model: 'gemini-2.5-flash',
-    contents: contents,
-    config: {
-      systemInstruction: INSTRUCTIONS[mode],
-      maxOutputTokens: 256,
-      temperature: 0.7,
-      topP: 0.8,
-      topK: 40,
+  let currentInstruction = INSTRUCTIONS[mode];
+  
+  if (dbItems && dbItems.length > 0) {
+    const words = dbItems.filter(i => i.type === 'word').map(i => i.content).join(', ');
+    const phrases = dbItems.filter(i => i.type === 'phrase').map(i => i.content).join(', ');
+    const articles = dbItems.filter(i => i.type === 'article').map(i => i.content).join('\n---\n');
+    
+    currentInstruction += "\n\nBACKGROUND DATABASE:\nThe user is currently trying to learn and practice the following materials. YOU MUST try to naturalistically weave in one or more of these vocabulary words, phrases, or discuss these themes in your response to help them learn:\n";
+    if (words) currentInstruction += `- Vocabulary Words: ${words}\n`;
+    if (phrases) currentInstruction += `- Phrases: ${phrases}\n`;
+    if (articles) currentInstruction += `- Articles/Sentences to discuss/reference:\n${articles}\n`;
+  }
+
+  let response;
+  try {
+    response = await ai.models.generateContentStream({
+      model: 'gemini-2.5-flash',
+      contents: contents,
+      config: {
+        systemInstruction: currentInstruction,
+        maxOutputTokens: 256,
+        temperature: 0.7,
+        topP: 0.8,
+        topK: 40,
+      }
+    });
+  } catch (error: any) {
+    const errorMsg = error?.message?.toLowerCase() || '';
+    if (errorMsg.includes('quota') || errorMsg.includes('429')) {
+      console.warn("Quota reached for gemini-2.5-flash, falling back to gemini-1.5-flash...");
+      response = await ai.models.generateContentStream({
+        model: 'gemini-1.5-flash',
+        contents: contents,
+        config: {
+          systemInstruction: currentInstruction,
+          maxOutputTokens: 256,
+          temperature: 0.7,
+          topP: 0.8,
+          topK: 40,
+        }
+      });
+    } else {
+      throw error;
     }
-  });
+  }
 
   for await (const chunk of response) {
     if (chunk.text) {
@@ -124,7 +164,7 @@ export async function generateSuggestion(history: Content[], mode: ChatMode = 'f
     ];
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-1.5-flash-8b',
       contents: contents,
       config: {
         maxOutputTokens: 50,
