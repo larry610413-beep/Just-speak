@@ -51,7 +51,6 @@ export default function App() {
   const transcriptRef = useRef('');
   const recognitionRef = useRef<any>(null);
   const isProcessingRef = useRef(false);
-  const audioQueueRef = useRef<string[]>([]);
   const isPlayingQueueRef = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -264,14 +263,72 @@ export default function App() {
     }
   };
 
-  const playResponse = (text: string) => {
+  const playResponse = (item: { text: string; audioPromise: Promise<{ data: string, mimeType: string } | null> | null }) => {
     return new Promise<void>(async (resolve) => {
       if (selectedVoiceURI === 'GEMINI_NATIVE') {
         const currentKey = apiKey || localStorage.getItem('english_trainer_api_key') || '';
-        await playGeminiAudio(text, currentKey, resolve, () => attemptWebSpeechTTS(text, resolve));
+        
+        // 使用預先下載好的 audio data（如果有的話）
+        setIsGeneratingSpeech(true);
+        const geminiAudioResponse = item.audioPromise ? await item.audioPromise : await generateSpeech(item.text, currentKey);
+        
+        if (geminiAudioResponse) {
+          try {
+            const mimeType = geminiAudioResponse.mimeType.toLowerCase();
+            const base64Data = geminiAudioResponse.data;
+
+            if (mimeType.includes('pcm') || mimeType.includes('l16')) {
+              const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+              const binaryString = window.atob(base64Data);
+              const len = binaryString.length;
+              const validLen = len % 2 === 0 ? len : len - 1;
+              const bytes = new Uint8Array(len);
+              for (let i = 0; i < len; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+              }
+              
+              const int16Array = new Int16Array(bytes.buffer, 0, validLen / 2);
+              const float32Array = new Float32Array(int16Array.length);
+              for (let i = 0; i < int16Array.length; i++) {
+                float32Array[i] = int16Array[i] / 32768.0;
+              }
+
+              const buffer = audioCtx.createBuffer(1, float32Array.length, 24000);
+              buffer.getChannelData(0).set(float32Array);
+
+              const source = audioCtx.createBufferSource();
+              source.buffer = buffer;
+              source.connect(audioCtx.destination);
+              source.onended = () => {
+                setIsSpeaking(false);
+                setIsGeneratingSpeech(false);
+                resolve();
+              };
+              source.start();
+              setIsSpeaking(true);
+              return;
+            } else {
+              const audioUrl = `data:${geminiAudioResponse.mimeType};base64,${base64Data}`;
+              const audio = new Audio(audioUrl);
+              audio.onended = () => {
+                setIsSpeaking(false);
+                setIsGeneratingSpeech(false);
+                resolve();
+              };
+              audio.onerror = () => attemptWebSpeechTTS(item.text, resolve);
+              await audio.play();
+              setIsSpeaking(true);
+              return;
+            }
+          } catch (e: any) {
+            console.error('Audio playback error:', e);
+          }
+        }
+        // Fallback if Gemini failed
+        attemptWebSpeechTTS(item.text, resolve);
         return;
       }
-      attemptWebSpeechTTS(text, resolve);
+      attemptWebSpeechTTS(item.text, resolve);
     });
   };
 
@@ -308,21 +365,31 @@ export default function App() {
     window.speechSynthesis.speak(utterance);
   };
 
+  // Prefetch型的音訊隊列：進入隊列的瞬間就開始下載，播放時音檔早就準備好了
+  type QueueItem = { text: string; audioPromise: Promise<{ data: string, mimeType: string } | null> | null };
+  const audioQueueRef = useRef<QueueItem[]>([]);
+
   const processAudioQueue = async () => {
     if (isPlayingQueueRef.current || audioQueueRef.current.length === 0) return;
     
     isPlayingQueueRef.current = true;
     while (audioQueueRef.current.length > 0) {
-      const sentence = audioQueueRef.current.shift();
-      if (sentence) {
-        await playResponse(sentence);
+      const item = audioQueueRef.current.shift();
+      if (item) {
+        await playResponse(item);
       }
     }
     isPlayingQueueRef.current = false;
   };
 
   const queueAudio = (text: string) => {
-    audioQueueRef.current.push(text);
+    // 如果是 Gemini 模式，進入隊列的瞬間就開始預載音訊（不等播放）
+    let audioPromise: Promise<{ data: string, mimeType: string } | null> | null = null;
+    if (selectedVoiceURI === 'GEMINI_NATIVE') {
+      const currentKey = apiKey || localStorage.getItem('english_trainer_api_key') || '';
+      audioPromise = generateSpeech(text, currentKey);
+    }
+    audioQueueRef.current.push({ text, audioPromise });
     processAudioQueue();
   };
 
@@ -479,27 +546,38 @@ export default function App() {
           )
         );
 
-        let remainingText = fullResponse.substring(lastProcessedIndex);
-        let sentenceEndMatch = remainingText.match(/[.!?]/);
-        
-        while (sentenceEndMatch) {
-          const endPos = sentenceEndMatch.index! + 1;
-          const sentence = remainingText.substring(0, endPos).trim();
+        // 如果是 Gemini 雲端語音，不要逐句送 TTS（會導致聲音不一致）
+        // 等整段回覆完成後，一次性送出
+        if (selectedVoiceURI !== 'GEMINI_NATIVE') {
+          let remainingText = fullResponse.substring(lastProcessedIndex);
+          let sentenceEndMatch = remainingText.match(/[.!?]/);
           
-          if (sentence.length > 1) {
-            queueAudio(sentence);
+          while (sentenceEndMatch) {
+            const endPos = sentenceEndMatch.index! + 1;
+            const sentence = remainingText.substring(0, endPos).trim();
+            
+            if (sentence.length > 1) {
+              queueAudio(sentence);
+            }
+            
+            lastProcessedIndex += endPos;
+            remainingText = fullResponse.substring(lastProcessedIndex);
+            sentenceEndMatch = remainingText.match(/[.!?]/);
           }
-          
-          lastProcessedIndex += endPos;
-          remainingText = fullResponse.substring(lastProcessedIndex);
-          sentenceEndMatch = remainingText.match(/[.!?]/);
         }
       }
       
-      // Queue any remaining text
-      const finalSentence = fullResponse.substring(lastProcessedIndex).trim();
-      if (finalSentence && finalSentence.length > 0) {
-        queueAudio(finalSentence);
+      // Gemini 雲端語音：整段回覆一次送出，聲音 100% 統一
+      if (selectedVoiceURI === 'GEMINI_NATIVE') {
+        if (fullResponse.trim().length > 0) {
+          queueAudio(fullResponse.trim());
+        }
+      } else {
+        // 非 Gemini 模式：送出最後剩餘的文字片段
+        const finalSentence = fullResponse.substring(lastProcessedIndex).trim();
+        if (finalSentence && finalSentence.length > 0) {
+          queueAudio(finalSentence);
+        }
       }
     } catch (error: any) {
       console.error('Error sending message:', error);
@@ -875,7 +953,7 @@ export default function App() {
                     </p>
                     {message.role === 'assistant' && message.content && !message.content.startsWith('[System]') && (
                       <button 
-                        onClick={() => playResponse(message.content)}
+                        onClick={() => playResponse({ text: message.content, audioPromise: null })}
                         className="absolute bottom-3 right-3 p-3 text-indigo-400 hover:text-indigo-300 transition-all bg-slate-950 rounded-2xl border border-slate-700 shadow-xl opacity-100 visible"
                         title="Play Speech"
                       >
