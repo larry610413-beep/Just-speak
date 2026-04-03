@@ -6,8 +6,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Bot, User, Loader2, Sparkles, Trash2, Mic, MicOff, Volume2, VolumeX } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { sendMessageStream, generateSpeech, ChatMode } from './gemini';
-import { Settings, Shield, Coffee, Key, Smile } from 'lucide-react';
+import { sendMessageStream, generateSpeech, ChatMode, generateSuggestion } from './gemini';
+import { Settings, Shield, Coffee, Key, Smile, Lightbulb } from 'lucide-react';
 import { hasValidKey } from './gemini';
 
 interface Message {
@@ -40,6 +40,7 @@ export default function App() {
   const [mode, setMode] = useState<ChatMode>('friendly');
   const [isGeneratingSpeech, setIsGeneratingSpeech] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [suggestion, setSuggestion] = useState('');
   const [usage, setUsage] = useState<UsageStats>({ count: 0, lastReset: new Date().toISOString() });
   const [apiKey, setApiKey] = useState(() => {
     const saved = localStorage.getItem('english_trainer_api_key');
@@ -416,6 +417,7 @@ export default function App() {
 
   const toggleListening = () => {
     unlockAudio();
+    if (!isListening) setSuggestion('');
     if (!SpeechRecognition) {
       setHasError('Your browser does not support Speech Recognition. Please use Google Chrome or Samsung Internet.');
       return;
@@ -502,6 +504,7 @@ export default function App() {
   const handleSend = async (text: string) => {
     if (!text.trim()) return;
     unlockAudio();
+    setSuggestion('');
     // Prevent double-send (voice onend can fire unexpectedly twice on some Android browsers)
     if (isProcessingRef.current) return;
 
@@ -592,6 +595,15 @@ export default function App() {
           queueAudio(finalSentence);
         }
       }
+
+      // Fetch suggestion asynchronously
+      const newHistory = [
+        ...history,
+        { role: 'model', parts: [{ text: fullResponse }] }
+      ];
+      generateSuggestion(newHistory as any[], mode, currentKey).then((hint) => {
+        setSuggestion(hint);
+      });
     } catch (error: any) {
       console.error('Error sending message:', error);
       let errorMessage = 'AI connection lost. Please try again.';
@@ -1020,29 +1032,53 @@ export default function App() {
             </button>
           </form>
 
-          <div className="flex items-center justify-center">
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.9 }}
-              onClick={toggleListening}
-              disabled={isLoading || isSpeaking}
-              className={`w-14 h-14 rounded-full flex items-center justify-center shadow-2xl transition-all relative select-none touch-none ${
-                isListening 
-                  ? 'bg-red-500 text-white shadow-red-500/40' 
-                  : (isLoading || isSpeaking) ? 'bg-slate-800 text-slate-600 cursor-not-allowed' : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-500/40'
-              }`}
-            >
-              {isListening && (
-                <motion.div 
-                  animate={{ scale: [1, 1.8, 1], opacity: [0.4, 0, 0.4] }}
-                  transition={{ repeat: Infinity, duration: 1.5 }}
-                  className="absolute inset-0 bg-red-500 rounded-full"
-                />
-              )}
-              <div className="relative z-10 scale-125">
-                {isListening ? <MicOff className="w-8 h-8" /> : <Mic className="w-8 h-8" />}
-              </div>
-            </motion.button>
+          <div className="flex items-center justify-between w-full relative h-16 md:h-20">
+            {/* Left side: Suggestion Box */}
+            <div className="flex-1 mr-4 h-full flex items-center overflow-hidden">
+              <AnimatePresence>
+                {suggestion && (
+                  <motion.div 
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -10 }}
+                    className="flex text-left items-center gap-3 p-3 md:p-4 bg-indigo-500/10 border border-indigo-500/20 text-indigo-200 rounded-3xl w-full shadow-inner cursor-pointer hover:bg-indigo-500/20 transition-all"
+                    onClick={() => {
+                        setInput(suggestion);
+                        setSuggestion('');
+                    }}
+                  >
+                    <Lightbulb className="w-5 h-5 md:w-6 md:h-6 flex-shrink-0 text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.8)]" />
+                    <p className="text-xs md:text-sm font-semibold tracking-tight leading-relaxed select-none">{suggestion}</p>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {/* Right side: Mic Button */}
+            <div className="flex-none">
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.9 }}
+                onClick={toggleListening}
+                disabled={isLoading || isSpeaking}
+                className={`w-14 h-14 md:w-16 md:h-16 rounded-full flex items-center justify-center shadow-2xl transition-all relative select-none touch-none ${
+                  isListening 
+                    ? 'bg-red-500 text-white shadow-red-500/40' 
+                    : (isLoading || isSpeaking) ? 'bg-slate-800 text-slate-600 cursor-not-allowed' : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-500/40'
+                }`}
+              >
+                {isListening && (
+                  <motion.div 
+                    animate={{ scale: [1, 1.8, 1], opacity: [0.4, 0, 0.4] }}
+                    transition={{ repeat: Infinity, duration: 1.5 }}
+                    className="absolute inset-0 bg-red-500 rounded-full"
+                  />
+                )}
+                <div className="relative z-10 scale-125 md:scale-150">
+                  {isListening ? <MicOff className="w-6 h-6 md:w-7 md:h-7" /> : <Mic className="w-6 h-6 md:w-7 md:h-7" />}
+                </div>
+              </motion.button>
+            </div>
           </div>
         </div>
       </footer>

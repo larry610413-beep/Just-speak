@@ -107,3 +107,34 @@ export async function generateSpeech(text: string, apiKey?: string): Promise<{ d
     return null;
   }
 }
+
+export async function generateSuggestion(history: Content[], mode: ChatMode = 'friendly', apiKey?: string): Promise<string> {
+  try {
+    const ai = getAIInstance(apiKey);
+    const limitedHistory = history.slice(-6);
+    
+    let prompt = "Provide EXACTLY ONE short, natural sentence that the user could say to reply to your last message. Give ONLY the suggested sentence. No quotes, no intro.";
+    if (mode === 'kids') {
+      prompt = "Provide EXACTLY ONE very simple, basic English sentence that a 10-year-old child could say to reply to your last message. Give ONLY the suggested sentence. No quotes, no intro.";
+    }
+
+    const contents: Content[] = [
+      ...limitedHistory,
+      { role: 'user', parts: [{ text: prompt }] }
+    ];
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: contents,
+      config: {
+        maxOutputTokens: 50,
+        temperature: 0.7,
+      }
+    });
+
+    return response.text?.replace(/["']/g, '').trim() || '';
+  } catch (e) {
+    console.error("Suggestion error:", e);
+    return "";
+  }
+}
