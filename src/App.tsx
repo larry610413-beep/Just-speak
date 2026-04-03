@@ -6,7 +6,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Bot, User, Loader2, Sparkles, Trash2, Mic, MicOff, Volume2, VolumeX, Plus } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { sendMessageStream, generateSpeech, ChatMode, generateSuggestion, DatabaseItem } from './gemini';
+import { sendMessageStream, generateSpeech, ChatMode, generateSuggestion } from './gemini';
 import { Settings, Shield, Coffee, Key, Smile, Lightbulb, Database } from 'lucide-react';
 import { hasValidKey } from './gemini';
 
@@ -45,12 +45,8 @@ export default function App() {
   const hintEnabledRef = useRef(hintEnabled);
   useEffect(() => { hintEnabledRef.current = hintEnabled; }, [hintEnabled]);
   const [showDatabase, setShowDatabase] = useState(false);
-  const [dbItems, setDbItems] = useState<DatabaseItem[]>(() => {
-    const saved = localStorage.getItem('english_trainer_db');
-    return saved ? JSON.parse(saved) : [];
-  });
-  const [dbInput, setDbInput] = useState('');
-  const [dbType, setDbType] = useState<'word'|'phrase'|'article'>('word');
+  const [dbEnabled, setDbEnabled] = useState(() => localStorage.getItem('english_trainer_db_enabled') !== 'false');
+  const [dbText, setDbText] = useState(() => localStorage.getItem('english_trainer_db_text') || '');
   const [usage, setUsage] = useState<UsageStats>({ count: 0, lastReset: new Date().toISOString() });
   const [apiKey, setApiKey] = useState(() => {
     const saved = localStorage.getItem('english_trainer_api_key');
@@ -138,19 +134,10 @@ export default function App() {
 
   useEffect(() => {
     if (isInitialized) {
-      localStorage.setItem('english_trainer_db', JSON.stringify(dbItems));
+      localStorage.setItem('english_trainer_db_text', dbText);
+      localStorage.setItem('english_trainer_db_enabled', String(dbEnabled));
     }
-  }, [dbItems, isInitialized]);
-  
-  const handleAddDbItem = () => {
-    if (!dbInput.trim()) return;
-    setDbItems(prev => [...prev, { id: Math.random().toString(36).substring(2), type: dbType, content: dbInput.trim() }]);
-    setDbInput('');
-  };
-  
-  const handleDeleteDbItem = (id: string) => {
-    setDbItems(prev => prev.filter(i => i.id !== id));
-  };
+  }, [dbText, dbEnabled, isInitialized]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -578,7 +565,7 @@ export default function App() {
       }));
 
       const currentKey = apiKey || localStorage.getItem('english_trainer_api_key') || '';
-      const stream = sendMessageStream(userMessage.content, history, mode, currentKey, dbItems);
+      const stream = sendMessageStream(userMessage.content, history, mode, currentKey, dbText, dbEnabled);
       
       for await (const chunk of stream) {
         fullResponse += chunk;
@@ -674,15 +661,27 @@ export default function App() {
     <div className="flex flex-col h-screen bg-slate-950 text-slate-100 font-sans selection:bg-indigo-500/30">
       {/* Header */}
       <header className="flex-none flex items-center justify-between px-6 py-4 bg-slate-900 border-b border-slate-800 shadow-2xl z-20">
-        <div className="flex items-center">
+        <div className="flex items-center gap-2">
+          <motion.button 
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => setDbEnabled(!dbEnabled)}
+            className={`px-3 py-2 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all shadow-xl flex items-center justify-center cursor-pointer ${
+                dbEnabled ? 'bg-indigo-600 text-white shadow-indigo-500/20' : 'bg-slate-800 text-slate-500 border border-slate-700'
+            }`}
+            title="Toggle Learning DB"
+          >
+            {dbEnabled ? 'DB: ON' : 'DB: OFF'}
+          </motion.button>
+          
           <motion.button 
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             onClick={() => setShowDatabase(true)}
-            className="p-2.5 bg-indigo-600 rounded-2xl shadow-xl shadow-indigo-500/20 flex items-center justify-center cursor-pointer hover:bg-indigo-500 transition-colors"
-            title="Learning Database"
+            className="p-2.5 bg-slate-800 border border-slate-700 rounded-2xl shadow-xl flex items-center justify-center cursor-pointer hover:bg-slate-700 transition-colors"
+            title="Edit Database"
           >
-            <Database className="w-5 h-5 text-white" />
+            <Database className="w-5 h-5 text-indigo-400" />
           </motion.button>
         </div>
         
@@ -906,7 +905,7 @@ export default function App() {
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-slate-900 border border-slate-800 rounded-[2.5rem] p-6 md:p-8 max-w-lg w-full shadow-2xl flex flex-col max-h-[90vh] overflow-hidden relative"
+              className="bg-slate-900 border border-slate-800 rounded-[2.5rem] p-6 md:p-8 max-w-lg w-full shadow-2xl flex flex-col h-[70vh] relative"
             >
               <div className="flex items-center justify-between relative mb-6">
                 <div className="flex items-center gap-3 text-indigo-400">
@@ -915,73 +914,32 @@ export default function App() {
                   </div>
                   <h3 className="text-xl font-black tracking-tight">Learning DB</h3>
                 </div>
-                <button 
-                  onClick={() => setShowDatabase(false)}
-                  className="p-3 text-slate-500 hover:text-slate-300 rounded-2xl hover:bg-slate-800 transition-all font-black text-xl leading-none"
-                >
-                  ✕
-                </button>
-              </div>
-
-              <div className="flex gap-2 mb-4 bg-slate-950 p-1.5 rounded-2xl border border-slate-800">
-                {(['word', 'phrase', 'article'] as const).map(type => (
+                <div className="flex items-center gap-2">
                   <button
-                    key={type}
-                    onClick={() => setDbType(type)}
-                    className={`flex-1 py-2 text-xs font-black uppercase tracking-widest rounded-xl transition-all ${dbType === type ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800'}`}
+                    onClick={() => setDbEnabled(!dbEnabled)}
+                    className={`px-4 py-2 font-bold text-xs uppercase tracking-widest rounded-xl transition-all ${
+                       dbEnabled ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' : 'bg-slate-800 text-slate-400 border border-slate-700'
+                    }`}
                   >
-                    {type === 'article' ? 'Sentence' : type}
+                    {dbEnabled ? 'ON' : 'OFF'}
                   </button>
-                ))}
+                  <button 
+                    onClick={() => setShowDatabase(false)}
+                    className="p-3 text-slate-500 hover:text-slate-300 rounded-2xl hover:bg-slate-800 transition-all font-black text-xl leading-none"
+                  >
+                    ✕
+                  </button>
+                </div>
               </div>
 
-              <div className="flex gap-2 mb-6">
-                <input 
-                  type="text"
-                  value={dbInput}
-                  onChange={(e) => setDbInput(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handleAddDbItem()}
-                  placeholder={`Add a new ${dbType === 'article' ? 'sentence/article' : dbType}...`}
-                  className="flex-1 bg-slate-950 border border-slate-700 text-slate-100 px-4 py-3 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-sm placeholder:text-slate-700"
+              <div className="flex-1 flex flex-col min-h-0 relative">
+                <textarea
+                  value={dbText}
+                  onChange={(e) => setDbText(e.target.value)}
+                  placeholder="Paste your vocabulary, phrases, or sentences here... The AI will seamlessly weave them into our chats to help you learn!"
+                  className="flex-1 w-full bg-slate-950 border border-slate-800 text-slate-200 p-4 rounded-2xl resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500/50 leading-relaxed"
+                  style={{scrollbarWidth: 'thin', scrollbarColor: '#4f46e5 transparent'}}
                 />
-                <button 
-                  onClick={handleAddDbItem}
-                  disabled={!dbInput.trim()}
-                  className="p-3 bg-indigo-600 text-white rounded-2xl hover:bg-indigo-700 disabled:bg-slate-800 disabled:text-slate-600 transition-all shadow-xl"
-                >
-                  <Plus className="w-5 h-5" />
-                </button>
-              </div>
-
-              <div className="flex-1 overflow-y-auto space-y-2 pr-2" style={{scrollbarWidth: 'thin', scrollbarColor: '#4f46e5 transparent'}}>
-                {dbItems.length === 0 ? (
-                    <div className="text-center py-10 opacity-50 flex flex-col items-center">
-                        <Database className="w-12 h-12 mb-4 text-slate-600" />
-                        <p className="text-sm font-semibold tracking-tight">Database is empty</p>
-                        <p className="text-xs mt-1 text-slate-500">AI will use items added here in conversations</p>
-                    </div>
-                ) : (
-                    dbItems.map(item => (
-                        <div key={item.id} className="flex items-center justify-between gap-3 p-4 bg-slate-800/40 rounded-2xl border border-slate-700/50 group">
-                            <div className="flex-1 min-w-0">
-                                <span className={`text-[10px] uppercase font-black tracking-widest px-2 py-0.5 rounded-full mr-2 ${
-                                    item.type === 'word' ? 'bg-amber-500/20 text-amber-400' :
-                                    item.type === 'phrase' ? 'bg-emerald-500/20 text-emerald-400' :
-                                    'bg-sky-500/20 text-sky-400'
-                                }`}>
-                                    {item.type}
-                                </span>
-                                <span className="text-sm text-slate-200 break-words">{item.content}</span>
-                            </div>
-                            <button 
-                                onClick={() => handleDeleteDbItem(item.id)}
-                                className="p-2 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-all"
-                            >
-                                <Trash2 className="w-4 h-4" />
-                            </button>
-                        </div>
-                    ))
-                )}
               </div>
             </motion.div>
           </div>
@@ -1129,30 +1087,49 @@ export default function App() {
 
       {/* Voice Control Area */}
       <footer className="flex-none p-3 px-4 md:p-4 bg-slate-900 border-t border-slate-800 shadow-2xl rounded-t-[2rem] z-20">
-        <div className="max-w-3xl mx-auto flex flex-col items-center gap-4">
-          {/* Text Input Row */}
-          <form 
-            onSubmit={(e) => { e.preventDefault(); handleSend(input); }}
-            className="w-full flex gap-2"
-          >
-            <input
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder={isListening ? "[ Speaking... ]" : "Type a message..."}
-              className="flex-1 p-3.5 bg-slate-950 border border-slate-700 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-slate-100 text-sm transition-all shadow-inner"
-              disabled={isLoading || isListening}
-            />
-            <button
-              type="submit"
-              disabled={isLoading || !input.trim() || isListening}
-              className="p-3.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:bg-slate-800 disabled:text-slate-600 transition-all shadow-xl"
+        <div className="max-w-3xl mx-auto flex flex-col items-center gap-2">
+          {/* Text Input Row & Hint Toggle Container */}
+          <div className="w-full flex flex-col gap-1.5 relative">
+            <form 
+              onSubmit={(e) => { e.preventDefault(); handleSend(input); }}
+              className="w-full flex gap-2"
             >
-              <Send className="w-5 h-5" />
-            </button>
-          </form>
+              <input
+                type="text"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder={isListening ? "[ Speaking... ]" : "Type a message..."}
+                className="flex-1 p-3.5 bg-slate-950 border border-slate-700 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-slate-100 text-sm transition-all shadow-inner"
+                disabled={isLoading || isListening}
+              />
+              <button
+                type="submit"
+                disabled={isLoading || !input.trim() || isListening}
+                className="p-3.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:bg-slate-800 disabled:text-slate-600 transition-all shadow-xl"
+              >
+                <Send className="w-5 h-5" />
+              </button>
+            </form>
+            
+            {/* Hint Lightbulb Toggle (half size, left-aligned) */}
+            <div className="w-full flex items-center pl-3">
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.9 }}
+                onClick={() => { setHintEnabled(!hintEnabled); setSuggestion(''); }}
+                className={`p-1.5 rounded-full transition-all border scale-75 transform origin-left ${
+                    hintEnabled 
+                    ? 'bg-amber-500/20 text-amber-400 border-amber-500/50 shadow-[0_0_8px_rgba(251,191,36,0.3)]' 
+                    : 'bg-slate-800 text-slate-500 border-slate-700 hover:text-slate-400'
+                }`}
+                title="Toggle AI Suggestions"
+              >
+                <Lightbulb className="w-4 h-4 md:w-5 md:h-5" />
+              </motion.button>
+            </div>
+          </div>
 
-          <div className="flex items-center justify-between w-full relative h-16 md:h-20">
+          <div className="flex items-center justify-between w-full relative h-[60px] md:h-[68px]">
             {/* Left side: Suggestion Box */}
             <div className="flex-1 mr-4 h-full flex items-center overflow-hidden">
               <AnimatePresence>
@@ -1167,28 +1144,14 @@ export default function App() {
                         setSuggestion('');
                     }}
                   >
-                    <p className="text-xs md:text-sm font-semibold tracking-tight leading-relaxed select-none">{suggestion}</p>
+                    <p className="text-xs md:text-sm font-semibold tracking-tight leading-relaxed select-none overflow-hidden text-ellipsis line-clamp-2 md:line-clamp-3">{suggestion}</p>
                   </motion.div>
                 )}
               </AnimatePresence>
             </div>
 
-            {/* Right side: Toggles & Mic Button */}
+            {/* Right side: Mic Button */}
             <div className="flex-none flex items-center gap-3">
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.9 }}
-                onClick={() => { setHintEnabled(!hintEnabled); setSuggestion(''); }}
-                className={`p-3 md:p-3.5 rounded-full transition-all border ${
-                    hintEnabled 
-                    ? 'bg-amber-500/20 text-amber-400 border-amber-500/50 shadow-[0_0_15px_rgba(251,191,36,0.2)]' 
-                    : 'bg-slate-800 text-slate-500 border-slate-700 hover:text-slate-400'
-                }`}
-                title="Toggle AI Suggestions"
-              >
-                <Lightbulb className="w-5 h-5 md:w-6 md:h-6" />
-              </motion.button>
-              
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.9 }}

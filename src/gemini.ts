@@ -32,13 +32,14 @@ const INSTRUCTIONS = {
 
 export type ChatMode = 'friendly' | 'coach' | 'kids';
 
-export interface DatabaseItem {
-  id: string;
-  type: 'word' | 'phrase' | 'article';
-  content: string;
-}
-
-export async function* sendMessageStream(message: string, history: Content[] = [], mode: ChatMode = 'friendly', apiKey?: string, dbItems: DatabaseItem[] = []) {
+export async function* sendMessageStream(
+  message: string, 
+  history: Content[] = [], 
+  mode: ChatMode = 'friendly', 
+  apiKey?: string, 
+  dbText: string = '',
+  dbEnabled: boolean = false
+) {
   const ai = getAIInstance(apiKey);
   
   // Limit history to last 12 messages for performance
@@ -51,15 +52,8 @@ export async function* sendMessageStream(message: string, history: Content[] = [
 
   let currentInstruction = INSTRUCTIONS[mode];
   
-  if (dbItems && dbItems.length > 0) {
-    const words = dbItems.filter(i => i.type === 'word').map(i => i.content).join(', ');
-    const phrases = dbItems.filter(i => i.type === 'phrase').map(i => i.content).join(', ');
-    const articles = dbItems.filter(i => i.type === 'article').map(i => i.content).join('\n---\n');
-    
-    currentInstruction += "\n\nBACKGROUND DATABASE:\nThe user is currently trying to learn and practice the following materials. YOU MUST try to naturalistically weave in one or more of these vocabulary words, phrases, or discuss these themes in your response to help them learn:\n";
-    if (words) currentInstruction += `- Vocabulary Words: ${words}\n`;
-    if (phrases) currentInstruction += `- Phrases: ${phrases}\n`;
-    if (articles) currentInstruction += `- Articles/Sentences to discuss/reference:\n${articles}\n`;
+  if (dbEnabled && dbText.trim().length > 0) {
+    currentInstruction += `\n\nBACKGROUND DATABASE:\nThe user is currently trying to learn and practice the following materials. YOU MUST try to naturalistically weave in concepts, phrases, or vocabulary from this text in your response to help them learn:\n${dbText}\n`;
   }
 
   let response;
