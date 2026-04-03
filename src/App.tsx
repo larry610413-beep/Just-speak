@@ -961,13 +961,13 @@ export default function App() {
                       ? 'bg-indigo-600 text-white rounded-tr-none shadow-indigo-500/10' 
                       : 'bg-slate-900 border border-slate-800 text-slate-100 rounded-tl-none shadow-black/20 pb-12'
                   }`}>
-                    <p className="text-sm md:text-base whitespace-pre-wrap leading-relaxed font-semibold tracking-tight pr-2">
+                    <p className="text-base md:text-lg whitespace-pre-wrap leading-relaxed font-semibold tracking-tight pr-2">
                       {message.content || (isLoading && message.role === 'assistant' ? 'Thinking...' : '')}
                     </p>
                     {message.role === 'assistant' && message.content && !message.content.startsWith('[System]') && (
                       <button 
                         onClick={() => playResponse({ text: message.content, audioPromise: null })}
-                        className="absolute bottom-3 right-3 p-3 text-indigo-400 hover:text-indigo-300 transition-all bg-slate-950 rounded-2xl border border-slate-700 shadow-xl opacity-100 visible"
+                        className="absolute bottom-3 right-3 p-3 text-indigo-400 hover:text-indigo-300 transition-all bg-slate-950 rounded-2xl border border-slate-700 shadow-xl opacity-100 visible touch-manipulation active:scale-90"
                         title="Play Speech"
                       >
                         <Volume2 className="w-5 h-5" />
