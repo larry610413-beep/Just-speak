@@ -61,6 +61,34 @@ export async function* sendMessageStream(message: string, history: Content[] = [
   }
 }
 
-export async function generateSpeech(text: string): Promise<string | null> {
-  return null;
+export async function generateSpeech(text: string, apiKey?: string): Promise<string | null> {
+  try {
+    const ai = getAIInstance(apiKey);
+    
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: [{ role: 'user', parts: [{ text: `Read this text aloud exactly as it is, with no added words or commentary: "${text}"` }] }],
+      config: {
+        responseModalities: ["AUDIO"],
+        speechConfig: {
+          voiceConfig: {
+            prebuiltVoiceConfig: {
+              voiceName: "Aoede" // Aoede = Natural US Female, Puck = Natural US Male
+            }
+          }
+        }
+      }
+    });
+
+    // Extract the base64 audio data from the response inlineData
+    const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData != null);
+    if (part && part.inlineData && part.inlineData.data) {
+      return part.inlineData.data;
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Gemini TTS API failed:', error);
+    return null;
+  }
 }

@@ -201,7 +201,34 @@ export default function App() {
   };
 
   const playResponse = (text: string) => {
-    return new Promise<void>((resolve) => {
+    return new Promise<void>(async (resolve) => {
+      // 如果選擇的是頂級的 Gemini 雲端語音
+      if (selectedVoiceURI === 'GEMINI_NATIVE') {
+        setIsGeneratingSpeech(true);
+        const currentKey = apiKey || localStorage.getItem('english_trainer_api_key') || '';
+        const base64Audio = await generateSpeech(text, currentKey);
+        
+        if (base64Audio) {
+          try {
+            const audio = new Audio(`data:audio/mp3;base64,${base64Audio}`);
+            audio.onended = () => {
+              setIsSpeaking(false);
+              setIsGeneratingSpeech(false);
+              resolve();
+            };
+            audio.onerror = () => attemptWebSpeechTTS(text, resolve); // Fallback on error
+            await audio.play();
+            setIsSpeaking(true);
+            return;
+          } catch (e) {
+            console.error('Failed to play Gemini Cloud Voice', e);
+            attemptWebSpeechTTS(text, resolve);
+            return;
+          }
+        }
+      }
+
+      // 如果不是選 Gemini 或是 Gemini 產生失敗，就用原本的網頁語音
       attemptWebSpeechTTS(text, resolve);
     });
   };
@@ -600,7 +627,8 @@ export default function App() {
                       className="w-full bg-slate-950 border border-slate-700 text-slate-100 px-5 py-4 rounded-3xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-sm transition-all appearance-none"
                     >
                       <option value="">Auto Select Best Voice</option>
-                      <option value="SYSTEM_DEFAULT">⭐ 手機系統預設 (套用你的 語音 III)</option>
+                      <option value="SYSTEM_DEFAULT">⭐ 手機系統預設 (需在手機設定改為主引擎)</option>
+                      <option value="GEMINI_NATIVE">✨【推薦】Gemini 雲端真人語音 (超自然美音)</option>
                       {availableVoices.map((v) => (
                         <option key={v.voiceURI} value={v.voiceURI}>
                           {v.name} {v.localService ? '(Device)' : '(Online)'}
