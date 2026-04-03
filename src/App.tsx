@@ -916,6 +916,17 @@ export default function App() {
                 </div>
                 <div className="flex items-center gap-2">
                   <button
+                    onClick={() => {
+                        if (window.confirm('Are you sure you want to clear the entire database?')) {
+                            setDbText('');
+                        }
+                    }}
+                    className="p-3 text-slate-500 hover:text-red-400 rounded-2xl hover:bg-slate-800 transition-all flex items-center justify-center title='Clear Database'"
+                    title="Clear Database"
+                  >
+                    <Trash2 className="w-5 h-5" />
+                  </button>
+                  <button
                     onClick={() => setDbEnabled(!dbEnabled)}
                     className={`px-4 py-2 font-bold text-xs uppercase tracking-widest rounded-xl transition-all ${
                        dbEnabled ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' : 'bg-slate-800 text-slate-400 border border-slate-700'
@@ -1088,8 +1099,8 @@ export default function App() {
       {/* Voice Control Area */}
       <footer className="flex-none p-3 px-4 md:p-4 bg-slate-900 border-t border-slate-800 shadow-2xl rounded-t-[2rem] z-20">
         <div className="max-w-3xl mx-auto flex flex-col items-center gap-2">
-          {/* Text Input Row & Hint Toggle Container */}
-          <div className="w-full flex flex-col gap-1.5 relative">
+          {/* Text Input Row */}
+          <div className="w-full flex justify-center relative">
             <form 
               onSubmit={(e) => { e.preventDefault(); handleSend(input); }}
               className="w-full flex gap-2"
@@ -1110,14 +1121,16 @@ export default function App() {
                 <Send className="w-5 h-5" />
               </button>
             </form>
-            
-            {/* Hint Lightbulb Toggle (half size, left-aligned) */}
-            <div className="w-full flex items-center pl-3">
+          </div>
+
+          <div className="flex items-center justify-between w-full relative h-[60px] md:h-[68px] mt-1">
+            {/* Left side: Hint Toggle & Suggestion Box */}
+            <div className="flex-1 mr-4 h-full flex items-center gap-2 overflow-hidden">
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.9 }}
                 onClick={() => { setHintEnabled(!hintEnabled); setSuggestion(''); }}
-                className={`p-1.5 rounded-full transition-all border scale-75 transform origin-left ${
+                className={`p-1.5 rounded-full transition-all border flex-shrink-0 scale-75 md:scale-90 ${
                     hintEnabled 
                     ? 'bg-amber-500/20 text-amber-400 border-amber-500/50 shadow-[0_0_8px_rgba(251,191,36,0.3)]' 
                     : 'bg-slate-800 text-slate-500 border-slate-700 hover:text-slate-400'
@@ -1126,12 +1139,6 @@ export default function App() {
               >
                 <Lightbulb className="w-4 h-4 md:w-5 md:h-5" />
               </motion.button>
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between w-full relative h-[60px] md:h-[68px]">
-            {/* Left side: Suggestion Box */}
-            <div className="flex-1 mr-4 h-full flex items-center overflow-hidden">
               <AnimatePresence>
                 {suggestion && (
                   <motion.div 
