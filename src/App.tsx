@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Loader2, Sparkles, Trash2, Mic, MicOff, Volume2, VolumeX, Plus } from 'lucide-react';
+import { Send, Bot, User, Loader2, Sparkles, Trash2, Mic, MicOff, Volume2, VolumeX, Plus, Play } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { sendMessageStream, generateSpeech, ChatMode, generateSuggestion } from './gemini';
 import { Settings, Shield, Coffee, Key, Smile, Lightbulb, Database } from 'lucide-react';
@@ -429,6 +429,17 @@ export default function App() {
     isPlayingQueueRef.current = false;
   };
 
+  const queueReplay = (text: string) => {
+    audioQueueRef.current.push({ text, audioPromise: null });
+    processAudioQueue();
+  };
+
+  const playLastThreeAI = () => {
+    const aiMessages = messages.filter(m => m.role === 'assistant' && m.content && !m.content.startsWith('[System]'));
+    const lastThree = aiMessages.slice(-3);
+    lastThree.forEach(msg => queueReplay(msg.content));
+  };
+
   const queueAudio = (text: string) => {
     // 如果是 Gemini 模式，進入隊列的瞬間就開始預載音訊（不等播放）
     let audioPromise: Promise<{ data: string, mimeType: string } | null> | null = null;
@@ -721,7 +732,6 @@ export default function App() {
         >
           {mode === 'friendly' && (
             <>
-              <Coffee className="w-4 h-4" />
               <span>Friendly</span>
             </>
           )}
@@ -747,6 +757,15 @@ export default function App() {
           >
             <Settings className="w-5 h-5" />
           </button>
+          {messages.filter(m => m.role === 'assistant' && !m.content.startsWith('[System]')).length > 0 && (
+            <button
+              onClick={playLastThreeAI}
+              className="p-2.5 text-slate-500 hover:text-indigo-400 hover:bg-indigo-500/10 transition-all rounded-2xl mr-1"
+              title="Play last 3 AI messages"
+            >
+              <Play className="w-5 h-5 fill-current" />
+            </button>
+          )}
           {messages.length > 0 && (
             <button
               onClick={() => setShowClearConfirm(true)}
@@ -1094,7 +1113,7 @@ export default function App() {
                     </p>
                     {message.role === 'assistant' && message.content && !message.content.startsWith('[System]') && (
                       <button 
-                        onClick={() => playResponse({ text: message.content, audioPromise: null })}
+                        onClick={() => queueReplay(message.content)}
                         className="absolute bottom-3 right-3 p-3 text-indigo-400 hover:text-indigo-300 transition-all bg-slate-950 rounded-2xl border border-slate-700 shadow-xl opacity-100 visible"
                         title="Play Speech"
                       >
