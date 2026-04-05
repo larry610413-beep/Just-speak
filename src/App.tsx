@@ -735,7 +735,7 @@ export default function App() {
   return (
     <div className="flex flex-col h-screen bg-slate-950 text-slate-100 font-sans selection:bg-indigo-500/30">
       {/* Header */}
-      <header className="flex-none flex items-center justify-between px-6 py-4 bg-slate-900 border-b border-slate-800 shadow-2xl z-20">
+      <header className="flex-none flex items-center justify-start gap-2 px-3 py-2 bg-slate-900 border-b border-slate-800 shadow-2xl z-20">
         <div className="flex items-center gap-2">
           <motion.button 
             whileHover={{ scale: 1.05 }}
@@ -766,7 +766,7 @@ export default function App() {
             else if (mode === 'coach') setMode('kids');
             else setMode('friendly');
           }}
-          className={`flex items-center gap-2 px-4 py-2 rounded-2xl text-sm font-black transition-all shadow-xl border ${
+          className={`flex items-center justify-center gap-2 px-4 h-[44px] rounded-2xl text-xs font-black transition-all shadow-xl border shrink-0 ${
             mode === 'friendly' 
               ? 'bg-slate-800 border-slate-700 text-slate-100' 
               : mode === 'coach'
@@ -793,34 +793,34 @@ export default function App() {
           )}
         </button>
 
-        <div className="flex items-center gap-1 md:gap-3 shrink-0">
+        <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={() => setShowSettings(true)}
-            className="p-2.5 md:p-3 text-slate-400 hover:text-indigo-400 hover:bg-slate-800 transition-all rounded-2xl"
+            className="w-[44px] h-[44px] flex items-center justify-center text-slate-400 hover:text-indigo-400 hover:bg-slate-800 transition-all rounded-2xl border border-transparent hover:border-slate-700"
             title="Settings"
           >
-            <Settings className="w-5 h-5 md:w-6 md:h-6" />
+            <Settings className="w-5 h-5" />
           </button>
           {messages.filter(m => m.role === 'assistant' && !m.content.startsWith('[System]')).length > 0 && (
             <button
               onClick={playLastThreeAI}
-              className={`p-2.5 md:p-3 transition-all rounded-2xl ${
+              className={`w-[44px] h-[44px] flex items-center justify-center transition-all rounded-2xl border ${
                 isMacroPlaying 
-                  ? 'bg-indigo-500 text-white animate-pulse shadow-lg' 
-                  : 'text-slate-500 hover:text-indigo-400 hover:bg-indigo-500/10'
+                  ? 'bg-indigo-500 text-white animate-pulse shadow-lg border-indigo-400' 
+                  : 'text-slate-500 hover:text-indigo-400 hover:bg-indigo-500/10 border-transparent hover:border-indigo-500/20'
               }`}
               title="Play last 3 AI messages"
             >
-              <Play className={`w-5 h-5 md:w-6 md:h-6 ${isMacroPlaying ? 'fill-current' : ''}`} />
+              <Play className={`w-5 h-5 ${isMacroPlaying ? 'fill-current' : ''}`} />
             </button>
           )}
           {messages.length > 0 && (
             <button
               onClick={() => setShowClearConfirm(true)}
-              className="p-2.5 md:p-3 text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-all rounded-2xl"
+              className="w-[44px] h-[44px] flex items-center justify-center text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-all rounded-2xl border border-transparent hover:border-red-500/20"
               title="Clear History"
             >
-              <Trash2 className="w-5 h-5 md:w-6 md:h-6" />
+              <Trash2 className="w-5 h-5" />
             </button>
           )}
         </div>
@@ -1238,8 +1238,8 @@ export default function App() {
       </main>
 
       {/* Voice Control Area */}
-      <footer className="flex-none p-3 px-4 md:p-4 bg-slate-900 border-t border-slate-800 shadow-2xl rounded-t-[2rem] z-20">
-        <div className="max-w-3xl mx-auto flex flex-col items-center gap-2">
+      <footer className="flex-none p-2 px-4 bg-slate-900 border-t border-slate-800 shadow-2xl rounded-t-[2rem] z-20">
+        <div className="max-w-3xl mx-auto flex flex-col items-center gap-1">
           {/* Text Input Row */}
           <div className="w-full flex justify-center relative">
             <form 
@@ -1251,61 +1251,28 @@ export default function App() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 placeholder={isListening ? "[ Speaking... ]" : "Type a message..."}
-                className="flex-1 p-3.5 bg-slate-950 border border-slate-700 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-slate-100 text-sm transition-all shadow-inner"
+                className="flex-1 p-3 bg-slate-950 border border-slate-700 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-slate-100 text-sm transition-all shadow-inner"
                 disabled={isLoading || isListening}
               />
               <button
                 type="submit"
                 disabled={isLoading || !input.trim() || isListening}
-                className="p-3.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:bg-slate-800 disabled:text-slate-600 transition-all shadow-xl"
+                className="p-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:bg-slate-800 disabled:text-slate-600 transition-all shadow-xl"
               >
                 <Send className="w-5 h-5" />
               </button>
             </form>
           </div>
 
-          <div className="flex items-center justify-between w-full relative h-[60px] md:h-[68px] mt-1">
-            {/* Left side: Hint Toggle & Suggestion Box */}
-            <div className="flex-1 mr-4 h-full flex items-center gap-2 overflow-hidden">
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.9 }}
-                onClick={() => { setHintEnabled(!hintEnabled); setSuggestion(''); }}
-                className={`p-1.5 rounded-full transition-all border flex-shrink-0 scale-75 md:scale-90 ${
-                    hintEnabled 
-                    ? 'bg-amber-500/20 text-amber-400 border-amber-500/50 shadow-[0_0_8px_rgba(251,191,36,0.3)]' 
-                    : 'bg-slate-800 text-slate-500 border-slate-700 hover:text-slate-400'
-                }`}
-                title="Toggle AI Suggestions"
-              >
-                <Lightbulb className="w-4 h-4 md:w-5 md:h-5" />
-              </motion.button>
-              <AnimatePresence>
-                {suggestion && (
-                  <motion.div 
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: -10 }}
-                    className="flex text-left items-center gap-3 p-3 md:p-4 bg-indigo-500/10 border border-indigo-500/20 text-indigo-200 rounded-3xl w-full shadow-inner cursor-pointer hover:bg-indigo-500/20 transition-all"
-                    onClick={() => {
-                        setInput(suggestion);
-                        setSuggestion('');
-                    }}
-                  >
-                    <p className="text-xs md:text-sm font-semibold tracking-tight leading-relaxed select-none overflow-hidden text-ellipsis line-clamp-2 md:line-clamp-3">{suggestion}</p>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-
-            {/* Right side: Mic Button */}
-            <div className="flex-none flex items-center gap-3">
+          <div className="flex items-center justify-start w-full relative h-[56px] md:h-[60px] gap-3">
+            {/* Mic Button on the Left */}
+            <div className="flex-none flex items-center">
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.9 }}
                 onClick={toggleListening}
                 disabled={isLoading || isSpeaking}
-                className={`w-14 h-14 md:w-16 md:h-16 rounded-full flex items-center justify-center shadow-2xl transition-all relative select-none touch-none ${
+                className={`w-12 h-12 md:w-14 md:h-14 rounded-2xl flex items-center justify-center shadow-2xl transition-all relative select-none touch-none ${
                   isListening 
                     ? 'bg-red-500 text-white shadow-red-500/40' 
                     : (isLoading || isSpeaking) ? 'bg-slate-800 text-slate-600 cursor-not-allowed' : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-500/40'
@@ -1313,16 +1280,49 @@ export default function App() {
               >
                 {isListening && (
                   <motion.div 
-                    animate={{ scale: [1, 1.8, 1], opacity: [0.4, 0, 0.4] }}
+                    animate={{ scale: [1, 1.5, 1], opacity: [0.4, 0, 0.4] }}
                     transition={{ repeat: Infinity, duration: 1.5 }}
-                    className="absolute inset-0 bg-red-500 rounded-full"
+                    className="absolute inset-0 bg-red-500 rounded-2xl"
                   />
                 )}
-                <div className="relative z-10 scale-125 md:scale-150">
+                <div className="relative z-10 scale-110 md:scale-125">
                   {isListening ? <MicOff className="w-6 h-6 md:w-7 md:h-7" /> : <Mic className="w-6 h-6 md:w-7 md:h-7" />}
                 </div>
               </motion.button>
             </div>
+
+            {/* Hint Toggle to the right of Mic */}
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.9 }}
+              onClick={() => { setHintEnabled(!hintEnabled); setSuggestion(''); }}
+              className={`p-2.5 rounded-full transition-all border flex-shrink-0 ${
+                  hintEnabled 
+                  ? 'bg-amber-500/20 text-amber-400 border-amber-500/50 shadow-[0_0_8px_rgba(251,191,36,0.3)]' 
+                  : 'bg-slate-800 text-slate-500 border-slate-700 hover:text-slate-400'
+              }`}
+              title="Toggle AI Suggestions"
+            >
+              <Lightbulb className="w-5 h-5" />
+            </motion.button>
+            
+            {/* Suggestion Box */}
+            <AnimatePresence>
+              {suggestion && (
+                <motion.div 
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -10 }}
+                  className="flex-1 text-left items-center p-3 bg-indigo-500/10 border border-indigo-500/20 text-indigo-200 rounded-2xl shadow-inner cursor-pointer hover:bg-indigo-500/20 transition-all overflow-hidden"
+                  onClick={() => {
+                      setInput(suggestion);
+                      setSuggestion('');
+                  }}
+                >
+                  <p className="text-xs font-semibold tracking-tight leading-snug whitespace-nowrap overflow-hidden text-ellipsis">{suggestion}</p>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </div>
       </footer>
