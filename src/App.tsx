@@ -334,7 +334,9 @@ export default function App() {
 
         if (mimeType.includes('pcm') || mimeType.includes('l16')) {
           const audioCtx = getAudioCtx();
-          if (audioCtx.state === 'suspended') await audioCtx.resume();
+          if (audioCtx.state === 'suspended' || audioCtx.state === 'interrupted') {
+            await audioCtx.resume();
+          }
           
           const binaryString = window.atob(base64Data);
           const len = binaryString.length;
@@ -733,15 +735,15 @@ export default function App() {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-slate-950 text-slate-100 font-sans selection:bg-indigo-500/30">
+    <div className="flex flex-col h-[100dvh] overflow-hidden bg-slate-950 text-slate-100 font-sans selection:bg-indigo-500/30">
       {/* Header */}
-      <header className="flex-none flex items-center justify-start gap-2 px-3 py-2 bg-slate-900 border-b border-slate-800 shadow-2xl z-20">
-        <div className="flex items-center gap-2">
+      <header className="flex-none flex items-center justify-start gap-1.5 px-2 py-1.5 bg-slate-900 border-b border-slate-800 shadow-2xl z-20">
+        <div className="flex items-center gap-1.5">
           <motion.button 
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             onClick={() => setDbEnabled(!dbEnabled)}
-            className={`w-[44px] h-[44px] text-[10px] font-black uppercase tracking-widest rounded-2xl transition-all shadow-xl flex items-center justify-center cursor-pointer shrink-0 border ${
+            className={`w-[35px] h-[35px] text-[8px] font-black uppercase tracking-widest rounded-xl transition-all shadow-xl flex items-center justify-center cursor-pointer shrink-0 border ${
                 dbEnabled ? 'bg-indigo-600 text-white shadow-indigo-500/20 border-indigo-500' : 'bg-slate-800 text-slate-500 border-slate-700'
             }`}
             title="Toggle Learning DB"
@@ -753,10 +755,10 @@ export default function App() {
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             onClick={() => setShowDatabase(true)}
-            className="w-[44px] h-[44px] bg-slate-800 border border-slate-700 rounded-2xl shadow-xl flex items-center justify-center cursor-pointer shrink-0 hover:bg-slate-700 transition-colors"
+            className="w-[35px] h-[35px] bg-slate-800 border border-slate-700 rounded-xl shadow-xl flex items-center justify-center cursor-pointer shrink-0 hover:bg-slate-700 transition-colors"
             title="Edit Database"
           >
-            <Database className="w-5 h-5 text-indigo-400" />
+            <Database className="w-4 h-4 text-indigo-400" />
           </motion.button>
         </div>
         
@@ -766,7 +768,7 @@ export default function App() {
             else if (mode === 'coach') setMode('kids');
             else setMode('friendly');
           }}
-          className={`flex items-center justify-center gap-2 px-4 h-[44px] rounded-2xl text-xs font-black transition-all shadow-xl border shrink-0 ${
+          className={`flex items-center justify-center gap-1.5 px-3 h-[35px] rounded-xl text-[10px] font-black transition-all shadow-xl border shrink-0 ${
             mode === 'friendly' 
               ? 'bg-slate-800 border-slate-700 text-slate-100' 
               : mode === 'coach'
@@ -781,46 +783,46 @@ export default function App() {
           )}
           {mode === 'coach' && (
             <>
-              <Shield className="w-4 h-4" />
+              <Shield className="w-3 h-3" />
               <span>Coach</span>
             </>
           )}
           {mode === 'kids' && (
             <>
-              <Smile className="w-4 h-4" />
+              <Smile className="w-3 h-3" />
               <span>Kids</span>
             </>
           )}
         </button>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-1.5 shrink-0">
           <button
             onClick={() => setShowSettings(true)}
-            className="w-[44px] h-[44px] flex items-center justify-center text-slate-400 hover:text-indigo-400 hover:bg-slate-800 transition-all rounded-2xl border border-transparent hover:border-slate-700"
+            className="w-[35px] h-[35px] flex items-center justify-center text-slate-400 hover:text-indigo-400 hover:bg-slate-800 transition-all rounded-xl border border-transparent hover:border-slate-700"
             title="Settings"
           >
-            <Settings className="w-5 h-5" />
+            <Settings className="w-4 h-4" />
           </button>
           {messages.filter(m => m.role === 'assistant' && !m.content.startsWith('[System]')).length > 0 && (
             <button
               onClick={playLastThreeAI}
-              className={`w-[44px] h-[44px] flex items-center justify-center transition-all rounded-2xl border ${
+              className={`w-[35px] h-[35px] flex items-center justify-center transition-all rounded-xl border ${
                 isMacroPlaying 
                   ? 'bg-indigo-500 text-white animate-pulse shadow-lg border-indigo-400' 
                   : 'text-slate-500 hover:text-indigo-400 hover:bg-indigo-500/10 border-transparent hover:border-indigo-500/20'
               }`}
               title="Play last 3 AI messages"
             >
-              <Play className={`w-5 h-5 ${isMacroPlaying ? 'fill-current' : ''}`} />
+              <Play className={`w-4 h-4 ${isMacroPlaying ? 'fill-current' : ''}`} />
             </button>
           )}
           {messages.length > 0 && (
             <button
               onClick={() => setShowClearConfirm(true)}
-              className="w-[44px] h-[44px] flex items-center justify-center text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-all rounded-2xl border border-transparent hover:border-red-500/20"
+              className="w-[35px] h-[35px] flex items-center justify-center text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-all rounded-xl border border-transparent hover:border-red-500/20"
               title="Clear History"
             >
-              <Trash2 className="w-5 h-5" />
+              <Trash2 className="w-4 h-4" />
             </button>
           )}
         </div>
@@ -1162,7 +1164,7 @@ export default function App() {
                     {message.role === 'assistant' && message.content && !message.content.startsWith('[System]') && (
                       <button 
                         onClick={() => queueReplay(message.content, message.id)}
-                        className={`absolute bottom-3 right-3 p-3 transition-all rounded-2xl shadow-xl border ${
+                        className={`absolute bottom-3 right-3 p-1.5 transition-all rounded-lg shadow-md border ${
                            activePlayId === message.id 
                              ? 'bg-indigo-500 text-white border-indigo-400 animate-pulse'
                              : queuedIds.includes(message.id)
@@ -1172,9 +1174,9 @@ export default function App() {
                         title="Play Speech"
                       >
                          {queuedIds.includes(message.id) && activePlayId !== message.id ? (
-                            <Loader2 className="w-5 h-5 animate-spin" />
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
                          ) : (
-                            <Volume2 className={`w-5 h-5 flex-shrink-0 ${activePlayId === message.id ? 'fill-current text-white' : ''}`} />
+                            <Volume2 className={`w-3.5 h-3.5 flex-shrink-0 ${activePlayId === message.id ? 'fill-current text-white' : ''}`} />
                          )}
                       </button>
                     )}
@@ -1238,8 +1240,8 @@ export default function App() {
       </main>
 
       {/* Voice Control Area */}
-      <footer className="flex-none p-2 px-4 bg-slate-900 border-t border-slate-800 shadow-2xl rounded-t-[2rem] z-20">
-        <div className="max-w-3xl mx-auto flex flex-col items-center gap-1">
+      <footer className="flex-none p-2 px-3 bg-slate-900 border-t border-slate-800 shadow-2xl rounded-t-3xl z-20">
+        <div className="max-w-3xl mx-auto flex flex-col items-center gap-1.5">
           {/* Text Input Row */}
           <div className="w-full flex justify-center relative">
             <form 
@@ -1251,78 +1253,79 @@ export default function App() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 placeholder={isListening ? "[ Speaking... ]" : "Type a message..."}
-                className="flex-1 p-3 bg-slate-950 border border-slate-700 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-slate-100 text-sm transition-all shadow-inner"
+                className="flex-1 py-2.5 px-4 bg-slate-950 border border-slate-700 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-slate-100 text-sm transition-all shadow-inner"
                 disabled={isLoading || isListening}
               />
               <button
                 type="submit"
                 disabled={isLoading || !input.trim() || isListening}
-                className="p-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:bg-slate-800 disabled:text-slate-600 transition-all shadow-xl"
+                className="px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:bg-slate-800 disabled:text-slate-600 transition-all shadow-xl"
               >
                 <Send className="w-5 h-5" />
               </button>
             </form>
           </div>
 
-          <div className="flex items-center justify-start w-full relative h-[56px] md:h-[60px] gap-3">
-            {/* Mic Button on the Left */}
-            <div className="flex-none flex items-center">
+          <div className="flex items-center justify-between w-full relative h-[48px] md:h-[52px]">
+            {/* Suggestion Box on the Left */}
+            <div className="flex-1 h-full flex items-center overflow-hidden mr-3">
+              <AnimatePresence>
+                {suggestion && (
+                  <motion.div 
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -10 }}
+                    className="flex-1 text-left items-center px-4 py-2 bg-indigo-500/5 border border-indigo-500/10 text-indigo-300 rounded-xl shadow-inner cursor-pointer hover:bg-indigo-500/20 transition-all overflow-hidden"
+                    onClick={() => {
+                        setInput(suggestion);
+                        setSuggestion('');
+                    }}
+                  >
+                    <p className="text-[10px] font-semibold tracking-tight whitespace-nowrap overflow-hidden text-ellipsis opacity-80">{suggestion}</p>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {/* Mic and Hint on the Right */}
+            <div className="flex-none flex items-center gap-2">
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.9 }}
+                onClick={() => { setHintEnabled(!hintEnabled); setSuggestion(''); }}
+                className={`flex items-center justify-center p-1.5 rounded-lg transition-all border shrink-0 ${
+                    hintEnabled 
+                    ? 'bg-amber-500/10 text-amber-500 border-amber-500/50 shadow-lg shadow-amber-500/10' 
+                    : 'bg-slate-800 text-slate-500 border-slate-700'
+                }`}
+                title="Toggle AI Suggestions"
+              >
+                <Lightbulb className="w-1.5 h-1.5" />
+              </motion.button>
+
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
                 onClick={toggleListening}
                 disabled={isLoading || isSpeaking}
-                className={`w-12 h-12 md:w-14 md:h-14 rounded-2xl flex items-center justify-center shadow-2xl transition-all relative select-none touch-none ${
+                className={`w-[40px] h-[40px] rounded-xl flex items-center justify-center shadow-2xl transition-all relative select-none touch-none ${
                   isListening 
                     ? 'bg-red-500 text-white shadow-red-500/40' 
-                    : (isLoading || isSpeaking) ? 'bg-slate-800 text-slate-600 cursor-not-allowed' : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-500/40'
+                    : (isLoading || isSpeaking) ? 'bg-slate-800 text-slate-600 cursor-not-allowed border border-slate-700' : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-500/40'
                 }`}
               >
                 {isListening && (
                   <motion.div 
-                    animate={{ scale: [1, 1.5, 1], opacity: [0.4, 0, 0.4] }}
+                    animate={{ scale: [1, 1.3, 1], opacity: [0.4, 0, 0.4] }}
                     transition={{ repeat: Infinity, duration: 1.5 }}
-                    className="absolute inset-0 bg-red-500 rounded-2xl"
+                    className="absolute inset-0 bg-red-500 rounded-xl"
                   />
                 )}
-                <div className="relative z-10 scale-110 md:scale-125">
-                  {isListening ? <MicOff className="w-6 h-6 md:w-7 md:h-7" /> : <Mic className="w-6 h-6 md:w-7 md:h-7" />}
+                <div className="relative z-10">
+                  {isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
                 </div>
               </motion.button>
             </div>
-
-            {/* Hint Toggle to the right of Mic */}
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.9 }}
-              onClick={() => { setHintEnabled(!hintEnabled); setSuggestion(''); }}
-              className={`p-2.5 rounded-full transition-all border flex-shrink-0 ${
-                  hintEnabled 
-                  ? 'bg-amber-500/20 text-amber-400 border-amber-500/50 shadow-[0_0_8px_rgba(251,191,36,0.3)]' 
-                  : 'bg-slate-800 text-slate-500 border-slate-700 hover:text-slate-400'
-              }`}
-              title="Toggle AI Suggestions"
-            >
-              <Lightbulb className="w-5 h-5" />
-            </motion.button>
-            
-            {/* Suggestion Box */}
-            <AnimatePresence>
-              {suggestion && (
-                <motion.div 
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -10 }}
-                  className="flex-1 text-left items-center p-3 bg-indigo-500/10 border border-indigo-500/20 text-indigo-200 rounded-2xl shadow-inner cursor-pointer hover:bg-indigo-500/20 transition-all overflow-hidden"
-                  onClick={() => {
-                      setInput(suggestion);
-                      setSuggestion('');
-                  }}
-                >
-                  <p className="text-xs font-semibold tracking-tight leading-snug whitespace-nowrap overflow-hidden text-ellipsis">{suggestion}</p>
-                </motion.div>
-              )}
-            </AnimatePresence>
           </div>
         </div>
       </footer>
