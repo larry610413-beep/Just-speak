@@ -66,6 +66,14 @@ export default function App() {
   const isPlayingQueueRef = useRef(false);
   const audioCacheRef = useRef<Map<string, { data: string, mimeType: string }>>(new Map());
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+
+  const getAudioCtx = () => {
+    if (!audioCtxRef.current) {
+      audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+    }
+    return audioCtxRef.current;
+  };
 
   // Load history from local storage on mount
   useEffect(() => {
@@ -177,7 +185,7 @@ export default function App() {
   };
 
   const unlockAudio = () => {
-    // Standard hack to unlock Web Speech API on mobile browsers
+    // 1. Web Speech API (Voice Synthesis)
     const synth = window.speechSynthesis;
     // Cancel any pending/stuck utterances first
     synth.cancel();
@@ -185,7 +193,22 @@ export default function App() {
     utterance.volume = 0;
     utterance.rate = 10; // Fast as possible
     synth.speak(utterance);
-    console.log('[DEBUG] Manual Unlock Triggered');
+
+    // 2. Web Audio API / HTML Audio
+    // Resume context to ensure asynchronous plays are allowed on mobile
+    const ctx = getAudioCtx();
+    if (ctx.state === 'suspended') {
+      ctx.resume();
+    }
+    
+    // Play a tiny silence buffer to fully unlock HTMLAudio/WebAudio on some mobile browsers
+    const buffer = ctx.createBuffer(1, 1, 22050);
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(ctx.destination);
+    source.start(0);
+
+    console.log('[DEBUG] Manual Unlock Triggered (Synth + Context)');
   };
 
   const getBestVoice = () => {
@@ -252,7 +275,9 @@ export default function App() {
       const base64Data = geminiAudioResponse.data;
 
       if (mimeType.includes('pcm')) {
-        const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const audioCtx = getAudioCtx();
+        if (audioCtx.state === 'suspended') await audioCtx.resume();
+        
         const binaryString = window.atob(base64Data);
         const len = binaryString.length;
         const validLen = len % 2 === 0 ? len : len - 1; // Prevent odd-length buffer errors
@@ -302,13 +327,15 @@ export default function App() {
   };
 
   const playGeminiFromData = (audioData: { data: string, mimeType: string }): Promise<void> => {
-    return new Promise((resolve) => {
+    return new Promise(async (resolve) => {
       try {
         const mimeType = audioData.mimeType.toLowerCase();
         const base64Data = audioData.data;
 
         if (mimeType.includes('pcm') || mimeType.includes('l16')) {
-          const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+          const audioCtx = getAudioCtx();
+          if (audioCtx.state === 'suspended') await audioCtx.resume();
+          
           const binaryString = window.atob(base64Data);
           const len = binaryString.length;
           const validLen = len % 2 === 0 ? len : len - 1;
@@ -345,7 +372,8 @@ export default function App() {
           audio.play().catch(() => resolve());
           setIsSpeaking(true);
         }
-      } catch {
+      } catch (e) {
+        console.error("Playback error:", e);
         resolve();
       }
     });
@@ -442,12 +470,14 @@ export default function App() {
   };
 
   const queueReplay = (text: string, msgId: string) => {
+    unlockAudio();
     setQueuedIds(prev => [...prev, msgId]);
     audioQueueRef.current.push({ text, audioPromise: null, msgId });
     processAudioQueue();
   };
 
   const playLastThreeAI = () => {
+    unlockAudio();
     const aiMessages = messages.filter(m => m.role === 'assistant' && m.content && !m.content.startsWith('[System]'));
     const lastThree = aiMessages.slice(-3);
     if (lastThree.length > 0) setIsMacroPlaying(true);
