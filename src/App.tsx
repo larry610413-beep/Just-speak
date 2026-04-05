@@ -41,14 +41,17 @@ export default function App() {
   const [isGeneratingSpeech, setIsGeneratingSpeech] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [suggestion, setSuggestion] = useState('');
-  const [hintEnabled, setHintEnabled] = useState(true);
+  const [hintEnabled, setHintEnabled] = useState(false);
   const hintEnabledRef = useRef(hintEnabled);
   useEffect(() => { hintEnabledRef.current = hintEnabled; }, [hintEnabled]);
   const [showDatabase, setShowDatabase] = useState(false);
-  const [dbEnabled, setDbEnabled] = useState(() => localStorage.getItem('english_trainer_db_enabled') !== 'false');
+  const [dbEnabled, setDbEnabled] = useState(true);
   const [dbText, setDbText] = useState(() => localStorage.getItem('english_trainer_db_text') || '');
   const [selectedText, setSelectedText] = useState('');
   const [showAddSuccess, setShowAddSuccess] = useState(false);
+  const [activePlayId, setActivePlayId] = useState<string | null>(null);
+  const [queuedIds, setQueuedIds] = useState<string[]>([]);
+  const [isMacroPlaying, setIsMacroPlaying] = useState(false);
   const [usage, setUsage] = useState<UsageStats>({ count: 0, lastReset: new Date().toISOString() });
   const [apiKey, setApiKey] = useState(() => {
     const saved = localStorage.getItem('english_trainer_api_key');
@@ -413,7 +416,7 @@ export default function App() {
   };
 
   // Prefetch型的音訊隊列：進入隊列的瞬間就開始下載，播放時音檔早就準備好了
-  type QueueItem = { text: string; audioPromise: Promise<{ data: string, mimeType: string } | null> | null };
+  type QueueItem = { text: string; audioPromise: Promise<{ data: string, mimeType: string } | null> | null, msgId?: string };
   const audioQueueRef = useRef<QueueItem[]>([]);
 
   const processAudioQueue = async () => {
@@ -423,21 +426,32 @@ export default function App() {
     while (audioQueueRef.current.length > 0) {
       const item = audioQueueRef.current.shift();
       if (item) {
+        if (item.msgId) {
+          setActivePlayId(item.msgId);
+          setQueuedIds(prev => prev.filter(id => id !== item.msgId));
+          setTimeout(() => {
+            document.getElementById(`msg-${item.msgId}`)?.scrollIntoView({behavior: 'smooth', block: 'center'});
+          }, 50);
+        }
         await playResponse(item);
+        if (item.msgId) setActivePlayId(null);
       }
     }
     isPlayingQueueRef.current = false;
+    setIsMacroPlaying(false);
   };
 
-  const queueReplay = (text: string) => {
-    audioQueueRef.current.push({ text, audioPromise: null });
+  const queueReplay = (text: string, msgId: string) => {
+    setQueuedIds(prev => [...prev, msgId]);
+    audioQueueRef.current.push({ text, audioPromise: null, msgId });
     processAudioQueue();
   };
 
   const playLastThreeAI = () => {
     const aiMessages = messages.filter(m => m.role === 'assistant' && m.content && !m.content.startsWith('[System]'));
     const lastThree = aiMessages.slice(-3);
-    lastThree.forEach(msg => queueReplay(msg.content));
+    if (lastThree.length > 0) setIsMacroPlaying(true);
+    lastThree.forEach(msg => queueReplay(msg.content, msg.id));
   };
 
   const queueAudio = (text: string) => {
@@ -697,19 +711,19 @@ export default function App() {
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             onClick={() => setDbEnabled(!dbEnabled)}
-            className={`px-3 py-2 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all shadow-xl flex items-center justify-center cursor-pointer ${
-                dbEnabled ? 'bg-indigo-600 text-white shadow-indigo-500/20' : 'bg-slate-800 text-slate-500 border border-slate-700'
+            className={`w-[44px] h-[44px] text-[10px] font-black uppercase tracking-widest rounded-2xl transition-all shadow-xl flex items-center justify-center cursor-pointer shrink-0 border ${
+                dbEnabled ? 'bg-indigo-600 text-white shadow-indigo-500/20 border-indigo-500' : 'bg-slate-800 text-slate-500 border-slate-700'
             }`}
             title="Toggle Learning DB"
           >
-            {dbEnabled ? 'DB: ON' : 'DB: OFF'}
+            {dbEnabled ? 'ON' : 'OFF'}
           </motion.button>
           
           <motion.button 
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             onClick={() => setShowDatabase(true)}
-            className="p-2.5 bg-slate-800 border border-slate-700 rounded-2xl shadow-xl flex items-center justify-center cursor-pointer hover:bg-slate-700 transition-colors"
+            className="w-[44px] h-[44px] bg-slate-800 border border-slate-700 rounded-2xl shadow-xl flex items-center justify-center cursor-pointer shrink-0 hover:bg-slate-700 transition-colors"
             title="Edit Database"
           >
             <Database className="w-5 h-5 text-indigo-400" />
@@ -749,30 +763,34 @@ export default function App() {
           )}
         </button>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-1 md:gap-3 shrink-0">
           <button
             onClick={() => setShowSettings(true)}
-            className="p-2.5 text-slate-400 hover:text-indigo-400 hover:bg-slate-800 transition-all rounded-2xl"
+            className="p-2.5 md:p-3 text-slate-400 hover:text-indigo-400 hover:bg-slate-800 transition-all rounded-2xl"
             title="Settings"
           >
-            <Settings className="w-5 h-5" />
+            <Settings className="w-5 h-5 md:w-6 md:h-6" />
           </button>
           {messages.filter(m => m.role === 'assistant' && !m.content.startsWith('[System]')).length > 0 && (
             <button
               onClick={playLastThreeAI}
-              className="p-2.5 text-slate-500 hover:text-indigo-400 hover:bg-indigo-500/10 transition-all rounded-2xl mr-1"
+              className={`p-2.5 md:p-3 transition-all rounded-2xl ${
+                isMacroPlaying 
+                  ? 'bg-indigo-500 text-white animate-pulse shadow-lg' 
+                  : 'text-slate-500 hover:text-indigo-400 hover:bg-indigo-500/10'
+              }`}
               title="Play last 3 AI messages"
             >
-              <Play className="w-5 h-5 fill-current" />
+              <Play className={`w-5 h-5 md:w-6 md:h-6 ${isMacroPlaying ? 'fill-current' : ''}`} />
             </button>
           )}
           {messages.length > 0 && (
             <button
               onClick={() => setShowClearConfirm(true)}
-              className="p-2.5 text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-all rounded-2xl"
+              className="p-2.5 md:p-3 text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-all rounded-2xl"
               title="Clear History"
             >
-              <Trash2 className="w-5 h-5" />
+              <Trash2 className="w-5 h-5 md:w-6 md:h-6" />
             </button>
           )}
         </div>
@@ -1102,7 +1120,7 @@ export default function App() {
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
-                <div className={`flex max-w-[95%] ${message.role === 'user' ? 'w-full justify-end' : 'w-full justify-start'}`}>
+                <div id={`msg-${message.id}`} className={`flex max-w-[95%] ${message.role === 'user' ? 'w-full justify-end' : 'w-full justify-start'}`}>
                   <div className={`p-4 md:p-5 rounded-3xl shadow-2xl relative group ${
                     message.role === 'user' 
                       ? 'bg-indigo-600 text-white rounded-tr-none shadow-indigo-500/10' 
@@ -1113,11 +1131,21 @@ export default function App() {
                     </p>
                     {message.role === 'assistant' && message.content && !message.content.startsWith('[System]') && (
                       <button 
-                        onClick={() => queueReplay(message.content)}
-                        className="absolute bottom-3 right-3 p-3 text-indigo-400 hover:text-indigo-300 transition-all bg-slate-950 rounded-2xl border border-slate-700 shadow-xl opacity-100 visible"
+                        onClick={() => queueReplay(message.content, message.id)}
+                        className={`absolute bottom-3 right-3 p-3 transition-all rounded-2xl shadow-xl border ${
+                           activePlayId === message.id 
+                             ? 'bg-indigo-500 text-white border-indigo-400 animate-pulse'
+                             : queuedIds.includes(message.id)
+                             ? 'bg-slate-800 text-indigo-300 border-indigo-500/50'
+                             : 'bg-slate-950 text-indigo-400 border-slate-700 hover:text-indigo-300 hover:bg-slate-800'
+                        }`}
                         title="Play Speech"
                       >
-                        <Volume2 className="w-5 h-5" />
+                         {queuedIds.includes(message.id) && activePlayId !== message.id ? (
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                         ) : (
+                            <Volume2 className={`w-5 h-5 flex-shrink-0 ${activePlayId === message.id ? 'fill-current text-white' : ''}`} />
+                         )}
                       </button>
                     )}
                   </div>
