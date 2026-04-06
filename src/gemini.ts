@@ -101,7 +101,7 @@ export async function generateSpeech(text: string, apiKey?: string): Promise<{ d
     const key = apiKey || getApiKey();
     if (!key) throw new Error('No API key');
 
-    const model = 'gemini-2.5-flash-preview-tts';
+    const model = 'gemini-1.5-flash';
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
 
     const response = await fetch(url, {

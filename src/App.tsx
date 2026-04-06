@@ -57,7 +57,6 @@ export default function App() {
     const saved = localStorage.getItem('english_trainer_api_key');
     return (saved && saved.trim().length > 10) ? saved : '';
   });
-  const [isKeySaved, setIsKeySaved] = useState(false);
   const [selectedVoiceURI, setSelectedVoiceURI] = useState(() => localStorage.getItem('english_trainer_voice_uri') || '');
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
   const transcriptRef = useRef('');
@@ -523,8 +522,7 @@ export default function App() {
     localStorage.setItem('english_trainer_api_key', key);
     setApiKey(key);
     setHasError(null);
-    setIsKeySaved(true);
-    // Persistent green state, no timeout reset
+    // Persistent green state, no timeout reset: key is now active
   };
 
   const toggleListening = () => {
@@ -1111,13 +1109,16 @@ export default function App() {
               <VolumeX className="w-6 h-6 flex-shrink-0" />
               <div className="space-y-2">
                 <p className="font-black uppercase tracking-tight">{hasError}</p>
-                <div className="space-y-1 text-xs opacity-60">
-                  <p>Troubleshooting:</p>
-                  <ul className="list-disc list-inside space-y-1">
-                    <li>Allow Microphone in address bar settings.</li>
-                    <li>Ensure you are in a secure context (HTTPS).</li>
-                  </ul>
-                </div>
+                {/* 只有在與錄音/權限相關時才顯示排錯指南 */}
+                {(hasError?.toLowerCase().includes('mic') || hasError?.toLowerCase().includes('permission')) && (
+                  <div className="space-y-1 text-xs opacity-60">
+                    <p>Troubleshooting:</p>
+                    <ul className="list-disc list-inside space-y-1">
+                      <li>Allow Microphone in address bar settings.</li>
+                      <li>Ensure you are in a secure context (HTTPS).</li>
+                    </ul>
+                  </div>
+                )}
               </div>
             </div>
             <div className="flex gap-3">
