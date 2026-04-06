@@ -370,12 +370,22 @@ export default function App() {
             setIsGeneratingSpeech(false);
             resolve();
           };
-          audio.onerror = () => resolve();
-          audio.play().catch(() => resolve());
+          audio.onerror = () => {
+            setIsSpeaking(false);
+            setIsGeneratingSpeech(false);
+            resolve();
+          };
+          audio.play().catch(() => {
+            setIsSpeaking(false);
+            setIsGeneratingSpeech(false);
+            resolve();
+          });
           setIsSpeaking(true);
         }
       } catch (e) {
         console.error("Playback error:", e);
+        setIsSpeaking(false);
+        setIsGeneratingSpeech(false);
         resolve();
       }
     });
@@ -1153,10 +1163,10 @@ export default function App() {
                 className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
                 <div id={`msg-${message.id}`} className={`flex max-w-[95%] ${message.role === 'user' ? 'w-full justify-end' : 'w-full justify-start'}`}>
-                  <div className={`p-4 md:p-5 rounded-3xl shadow-2xl relative group ${
+                  <div className={`p-3 md:p-3.5 rounded-3xl shadow-2xl relative group ${
                     message.role === 'user' 
                       ? 'bg-indigo-600 text-white rounded-tr-none shadow-indigo-500/10' 
-                      : 'bg-slate-900 border border-slate-800 text-slate-100 rounded-tl-none shadow-black/20 pb-12'
+                      : 'bg-slate-900 border border-slate-800 text-slate-100 rounded-tl-none shadow-black/20 pb-10'
                   }`}>
                     <p className="text-base md:text-lg whitespace-pre-wrap leading-relaxed font-semibold tracking-tight pr-2">
                       {message.content || (isLoading && message.role === 'assistant' ? 'Thinking...' : '')}
@@ -1300,7 +1310,7 @@ export default function App() {
                 }`}
                 title="Toggle AI Suggestions"
               >
-                <Lightbulb className="w-1.5 h-1.5" />
+                <Lightbulb className="w-3.5 h-3.5" />
               </motion.button>
 
               <motion.button

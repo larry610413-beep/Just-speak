@@ -1,1 +1,17 @@
 @import "tailwindcss";
+
+html, body {
+  height: 100dvh;
+  width: 100vw;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+  position: fixed;
+  background-color: #020617; /* slate-950 */
+}
+
+#root {
+  height: 100dvh;
+  width: 100vw;
+  overflow: hidden;
+}
