@@ -185,30 +185,28 @@ export default function App() {
   };
 
   const unlockAudio = () => {
-    // 1. Web Speech API (Voice Synthesis)
+    // 1. Web Speech API (System Voices) Unlock
     const synth = window.speechSynthesis;
     // Cancel any pending/stuck utterances first
     synth.cancel();
     const utterance = new SpeechSynthesisUtterance(' ');
     utterance.volume = 0;
-    utterance.rate = 10; // Fast as possible
     synth.speak(utterance);
-
-    // 2. Web Audio API / HTML Audio
-    // Resume context to ensure asynchronous plays are allowed on mobile
-    const ctx = getAudioCtx();
-    if (ctx.state === 'suspended') {
-      ctx.resume();
+    
+    // 2. Web Audio API (Gemini Native) Context Unlock
+    const audioCtx = getAudioCtx();
+    if (audioCtx.state === 'suspended' || audioCtx.state === 'closed') {
+      audioCtx.resume();
     }
     
-    // Play a tiny silence buffer to fully unlock HTMLAudio/WebAudio on some mobile browsers
-    const buffer = ctx.createBuffer(1, 1, 22050);
-    const source = ctx.createBufferSource();
+    // Play a short silent buffer synchronously to hold the audio active
+    // This helps bypass the gesture timeout on mobile devices
+    const buffer = audioCtx.createBuffer(1, 44100 * 2, 44100); // 2 seconds of silence
+    const source = audioCtx.createBufferSource();
     source.buffer = buffer;
-    source.connect(ctx.destination);
+    source.connect(audioCtx.destination);
     source.start(0);
-
-    console.log('[DEBUG] Manual Unlock Triggered (Synth + Context)');
+    console.log('[DEBUG] Audio fully unlocked (Speech + WebAudio context)');
   };
 
   const getBestVoice = () => {
@@ -413,7 +411,9 @@ export default function App() {
           resolve();
           return;
         }
-        // Gemini 失敗時：不播放任何聲音（絕不偷偷切回機械音）
+        
+        // Gemini 失敗時（可能是 API Key 無效或網路逾時）
+        setHasError("Gemini Voice failed to return audio (Check API Key/Quota)");
         setIsGeneratingSpeech(false);
         resolve();
         return;
@@ -482,18 +482,30 @@ export default function App() {
   };
 
   const queueReplay = (text: string, msgId: string) => {
+    // 1. 同步解鎖音訊 (必須在點擊瞬間執行)
     unlockAudio();
+    // 2. 顯示讀取圖示
+    setIsGeneratingSpeech(true);
     setQueuedIds(prev => [...prev, msgId]);
+    // 3. 加入播放隊列
     audioQueueRef.current.push({ text, audioPromise: null, msgId });
+    // 4. 開始播放
     processAudioQueue();
   };
 
   const playLastThreeAI = () => {
+    // 同步解鎖
     unlockAudio();
-    const aiMessages = messages.filter(m => m.role === 'assistant' && m.content && !m.content.startsWith('[System]'));
-    const lastThree = aiMessages.slice(-3);
-    if (lastThree.length > 0) setIsMacroPlaying(true);
-    lastThree.forEach(msg => queueReplay(msg.content, msg.id));
+    const assistantMessages = messages.filter(m => m.role === 'assistant' && !m.content.startsWith('[System]'));
+    const lastThree = assistantMessages.slice(-3);
+    if (lastThree.length === 0) return;
+
+    setIsMacroPlaying(true);
+    // 批次加入隊列，不立刻重複觸發 process
+    const items = lastThree.map(m => ({ text: m.content, audioPromise: null, msgId: m.id }));
+    audioQueueRef.current.push(...items);
+    setQueuedIds(prev => [...prev, ...lastThree.map(m => m.id)]);
+    processAudioQueue().then(() => setIsMacroPlaying(false));
   };
 
   const queueAudio = (text: string) => {
@@ -753,7 +765,7 @@ export default function App() {
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             onClick={() => setDbEnabled(!dbEnabled)}
-            className={`w-[35px] h-[35px] text-[8px] font-black uppercase tracking-widest rounded-xl transition-all shadow-xl flex items-center justify-center cursor-pointer shrink-0 border ${
+            className={`w-[40px] h-[35px] text-[12px] font-black uppercase tracking-tight rounded-xl transition-all shadow-xl flex items-center justify-center cursor-pointer shrink-0 border ${
                 dbEnabled ? 'bg-indigo-600 text-white shadow-indigo-500/20 border-indigo-500' : 'bg-slate-800 text-slate-500 border-slate-700'
             }`}
             title="Toggle Learning DB"
@@ -778,7 +790,7 @@ export default function App() {
             else if (mode === 'coach') setMode('kids');
             else setMode('friendly');
           }}
-          className={`flex items-center justify-center gap-1.5 px-3 h-[35px] rounded-xl text-[10px] font-black transition-all shadow-xl border shrink-0 ${
+          className={`flex items-center justify-center gap-1.5 px-3 h-[35px] rounded-xl text-[12px] font-black transition-all shadow-xl border shrink-0 ${
             mode === 'friendly' 
               ? 'bg-slate-800 border-slate-700 text-slate-100' 
               : mode === 'coach'
@@ -1162,34 +1174,34 @@ export default function App() {
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
-                <div id={`msg-${message.id}`} className={`flex max-w-[95%] ${message.role === 'user' ? 'w-full justify-end' : 'w-full justify-start'}`}>
+                <div id={`msg-${message.id}`} className={`flex max-w-[95%] relative ${message.role === 'user' ? 'w-full justify-end' : 'w-full justify-start'}`}>
+                  {message.role === 'assistant' && message.content && !message.content.startsWith('[System]') && (
+                    <button 
+                      onClick={() => queueReplay(message.content, message.id)}
+                      className={`absolute -top-3 -left-1.5 z-10 p-1.5 transition-all rounded-lg shadow-2xl border ${
+                         activePlayId === message.id 
+                           ? 'bg-indigo-500 text-white border-indigo-400 animate-pulse'
+                           : queuedIds.includes(message.id)
+                           ? 'bg-slate-800 text-indigo-300 border-indigo-500/50'
+                           : 'bg-slate-950 text-indigo-400 border-slate-700 hover:text-indigo-300 hover:bg-slate-800'
+                      }`}
+                      title="Play Speech"
+                    >
+                       {queuedIds.includes(message.id) && activePlayId !== message.id ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                       ) : (
+                          <Volume2 className={`w-3.5 h-3.5 flex-shrink-0 ${activePlayId === message.id ? 'fill-current text-white' : ''}`} />
+                       )}
+                    </button>
+                  )}
                   <div className={`p-3 md:p-3.5 rounded-3xl shadow-2xl relative group ${
                     message.role === 'user' 
                       ? 'bg-indigo-600 text-white rounded-tr-none shadow-indigo-500/10' 
-                      : 'bg-slate-900 border border-slate-800 text-slate-100 rounded-tl-none shadow-black/20 pb-10'
+                      : 'bg-slate-900 border border-slate-800 text-slate-100 rounded-tl-none shadow-black/20'
                   }`}>
                     <p className="text-base md:text-lg whitespace-pre-wrap leading-relaxed font-semibold tracking-tight pr-2">
                       {message.content || (isLoading && message.role === 'assistant' ? 'Thinking...' : '')}
                     </p>
-                    {message.role === 'assistant' && message.content && !message.content.startsWith('[System]') && (
-                      <button 
-                        onClick={() => queueReplay(message.content, message.id)}
-                        className={`absolute bottom-3 right-3 p-1.5 transition-all rounded-lg shadow-md border ${
-                           activePlayId === message.id 
-                             ? 'bg-indigo-500 text-white border-indigo-400 animate-pulse'
-                             : queuedIds.includes(message.id)
-                             ? 'bg-slate-800 text-indigo-300 border-indigo-500/50'
-                             : 'bg-slate-950 text-indigo-400 border-slate-700 hover:text-indigo-300 hover:bg-slate-800'
-                        }`}
-                        title="Play Speech"
-                      >
-                         {queuedIds.includes(message.id) && activePlayId !== message.id ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                         ) : (
-                            <Volume2 className={`w-3.5 h-3.5 flex-shrink-0 ${activePlayId === message.id ? 'fill-current text-white' : ''}`} />
-                         )}
-                      </button>
-                    )}
                   </div>
                 </div>
               </motion.div>
@@ -1301,20 +1313,6 @@ export default function App() {
               {/* Mic and Hint on the Right */}
               <div className="flex-none flex items-center gap-2">
                 <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.9 }}
-                  onClick={() => { setHintEnabled(!hintEnabled); setSuggestion(''); }}
-                  className={`flex items-center justify-center p-1.5 rounded-lg transition-all border shrink-0 ${
-                      hintEnabled 
-                      ? 'bg-amber-500/10 text-amber-500 border-amber-500/50 shadow-lg shadow-amber-500/10' 
-                      : 'bg-slate-800 text-slate-500 border-slate-700'
-                  }`}
-                  title="Toggle AI Suggestions"
-                >
-                  <Lightbulb className="w-3.5 h-3.5" />
-                </motion.button>
-
-                <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                   onClick={toggleListening}
@@ -1335,6 +1333,20 @@ export default function App() {
                   <div className="relative z-10">
                     {isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
                   </div>
+                </motion.button>
+
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.9 }}
+                  onClick={() => { setHintEnabled(!hintEnabled); setSuggestion(''); }}
+                  className={`flex items-center justify-center p-1.5 rounded-lg transition-all border shrink-0 ${
+                      hintEnabled 
+                      ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/30' 
+                      : 'bg-slate-800 text-slate-500 border-slate-700'
+                  }`}
+                  title="Toggle AI Suggestions"
+                >
+                  <Lightbulb className={`w-3.5 h-3.5 ${hintEnabled ? 'fill-yellow-400 text-yellow-500' : ''}`} />
                 </motion.button>
               </div>
             </div>
