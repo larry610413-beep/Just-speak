@@ -1195,7 +1195,7 @@ export default function App() {
               </motion.div>
             ))}
           </AnimatePresence>
-          <div ref={messagesEndRef} />
+          <div className="h-2" />
         </div>
 
         {/* Floating Add to DB Button */}
@@ -1247,98 +1247,100 @@ export default function App() {
             </motion.div>
           )}
         </AnimatePresence>
+
+        <div ref={messagesEndRef} className="h-8 md:h-12" />
+
+        {/* Voice Control Area (Now inside scrollable content) */}
+        <footer className="mt-8 mb-12 p-2 px-3 bg-slate-900 shadow-2xl rounded-3xl border border-slate-800">
+          <div className="max-w-3xl mx-auto flex flex-col items-center gap-1.5">
+            {/* Text Input Row */}
+            <div className="w-full flex justify-center relative">
+              <form 
+                onSubmit={(e) => { e.preventDefault(); handleSend(input); }}
+                className="w-full flex gap-2"
+              >
+                <input
+                  type="text"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  placeholder={isListening ? "[ Speaking... ]" : "Type a message..."}
+                  className="flex-1 py-2.5 px-4 bg-slate-950 border border-slate-700 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-slate-100 text-sm transition-all shadow-inner"
+                  disabled={isLoading || isListening}
+                />
+                <button
+                  type="submit"
+                  disabled={isLoading || !input.trim() || isListening}
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:bg-slate-800 disabled:text-slate-600 transition-all shadow-xl"
+                >
+                  <Send className="w-5 h-5" />
+                </button>
+              </form>
+            </div>
+
+            <div className="flex items-center justify-between w-full relative h-[48px] md:h-[52px]">
+              {/* Suggestion Box on the Left */}
+              <div className="flex-1 h-full flex items-center overflow-hidden mr-3">
+                <AnimatePresence>
+                  {suggestion && (
+                    <motion.div 
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -10 }}
+                      className="flex-1 text-left items-center px-4 py-2 bg-indigo-500/5 border border-indigo-500/10 text-indigo-300 rounded-xl shadow-inner cursor-pointer hover:bg-indigo-500/20 transition-all overflow-hidden"
+                      onClick={() => {
+                          setInput(suggestion);
+                          setSuggestion('');
+                      }}
+                    >
+                      <p className="text-[10px] font-semibold tracking-tight whitespace-nowrap overflow-hidden text-ellipsis opacity-80">{suggestion}</p>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              {/* Mic and Hint on the Right */}
+              <div className="flex-none flex items-center gap-2">
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.9 }}
+                  onClick={() => { setHintEnabled(!hintEnabled); setSuggestion(''); }}
+                  className={`flex items-center justify-center p-1.5 rounded-lg transition-all border shrink-0 ${
+                      hintEnabled 
+                      ? 'bg-amber-500/10 text-amber-500 border-amber-500/50 shadow-lg shadow-amber-500/10' 
+                      : 'bg-slate-800 text-slate-500 border-slate-700'
+                  }`}
+                  title="Toggle AI Suggestions"
+                >
+                  <Lightbulb className="w-3.5 h-3.5" />
+                </motion.button>
+
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={toggleListening}
+                  disabled={isLoading || isSpeaking}
+                  className={`w-[40px] h-[40px] rounded-xl flex items-center justify-center shadow-2xl transition-all relative select-none touch-none ${
+                    isListening 
+                      ? 'bg-red-500 text-white shadow-red-500/40' 
+                      : (isLoading || isSpeaking) ? 'bg-slate-800 text-slate-600 cursor-not-allowed border border-slate-700' : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-500/40'
+                  }`}
+                >
+                  {isListening && (
+                    <motion.div 
+                      animate={{ scale: [1, 1.3, 1], opacity: [0.4, 0, 0.4] }}
+                      transition={{ repeat: Infinity, duration: 1.5 }}
+                      className="absolute inset-0 bg-red-500 rounded-xl"
+                    />
+                  )}
+                  <div className="relative z-10">
+                    {isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+                  </div>
+                </motion.button>
+              </div>
+            </div>
+          </div>
+        </footer>
       </main>
-
-      {/* Voice Control Area */}
-      <footer className="flex-none p-2 px-3 bg-slate-900 border-t border-slate-800 shadow-2xl rounded-t-3xl z-20">
-        <div className="max-w-3xl mx-auto flex flex-col items-center gap-1.5">
-          {/* Text Input Row */}
-          <div className="w-full flex justify-center relative">
-            <form 
-              onSubmit={(e) => { e.preventDefault(); handleSend(input); }}
-              className="w-full flex gap-2"
-            >
-              <input
-                type="text"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder={isListening ? "[ Speaking... ]" : "Type a message..."}
-                className="flex-1 py-2.5 px-4 bg-slate-950 border border-slate-700 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-slate-100 text-sm transition-all shadow-inner"
-                disabled={isLoading || isListening}
-              />
-              <button
-                type="submit"
-                disabled={isLoading || !input.trim() || isListening}
-                className="px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:bg-slate-800 disabled:text-slate-600 transition-all shadow-xl"
-              >
-                <Send className="w-5 h-5" />
-              </button>
-            </form>
-          </div>
-
-          <div className="flex items-center justify-between w-full relative h-[48px] md:h-[52px]">
-            {/* Suggestion Box on the Left */}
-            <div className="flex-1 h-full flex items-center overflow-hidden mr-3">
-              <AnimatePresence>
-                {suggestion && (
-                  <motion.div 
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: -10 }}
-                    className="flex-1 text-left items-center px-4 py-2 bg-indigo-500/5 border border-indigo-500/10 text-indigo-300 rounded-xl shadow-inner cursor-pointer hover:bg-indigo-500/20 transition-all overflow-hidden"
-                    onClick={() => {
-                        setInput(suggestion);
-                        setSuggestion('');
-                    }}
-                  >
-                    <p className="text-[10px] font-semibold tracking-tight whitespace-nowrap overflow-hidden text-ellipsis opacity-80">{suggestion}</p>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-
-            {/* Mic and Hint on the Right */}
-            <div className="flex-none flex items-center gap-2">
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.9 }}
-                onClick={() => { setHintEnabled(!hintEnabled); setSuggestion(''); }}
-                className={`flex items-center justify-center p-1.5 rounded-lg transition-all border shrink-0 ${
-                    hintEnabled 
-                    ? 'bg-amber-500/10 text-amber-500 border-amber-500/50 shadow-lg shadow-amber-500/10' 
-                    : 'bg-slate-800 text-slate-500 border-slate-700'
-                }`}
-                title="Toggle AI Suggestions"
-              >
-                <Lightbulb className="w-3.5 h-3.5" />
-              </motion.button>
-
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={toggleListening}
-                disabled={isLoading || isSpeaking}
-                className={`w-[40px] h-[40px] rounded-xl flex items-center justify-center shadow-2xl transition-all relative select-none touch-none ${
-                  isListening 
-                    ? 'bg-red-500 text-white shadow-red-500/40' 
-                    : (isLoading || isSpeaking) ? 'bg-slate-800 text-slate-600 cursor-not-allowed border border-slate-700' : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-500/40'
-                }`}
-              >
-                {isListening && (
-                  <motion.div 
-                    animate={{ scale: [1, 1.3, 1], opacity: [0.4, 0, 0.4] }}
-                    transition={{ repeat: Infinity, duration: 1.5 }}
-                    className="absolute inset-0 bg-red-500 rounded-xl"
-                  />
-                )}
-                <div className="relative z-10">
-                  {isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-                </div>
-              </motion.button>
-            </div>
-          </div>
-        </div>
-      </footer>
     </div>
   );
 }
