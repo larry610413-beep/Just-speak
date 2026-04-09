@@ -939,7 +939,7 @@ export default function App() {
                     >
                       <option value="">Auto Select Best Voice</option>
                       <option value="SYSTEM_DEFAULT">⭐ 手機系統預設 (需在手機設定改為主引擎)</option>
-                      <option value="GEMINI_NATIVE">✨【推薦】Gemini 雲端真人語音 (超自然美音)</option>
+                      <option value="GEMINI_NATIVE">✨【推薦】Gemini 雲端真人語音 (需付費方案)</option>
                       {availableVoices.map((v) => (
                         <option key={v.voiceURI} value={v.voiceURI}>
                           {v.name} {v.localService ? '(Device)' : '(Online)'}
