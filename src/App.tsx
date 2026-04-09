@@ -870,12 +870,12 @@ export default function App() {
       {/* Settings Modal */}
       <AnimatePresence>
         {showSettings && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <div className="fixed inset-0 z-50 flex items-start justify-center pt-12 pb-4 px-4 bg-black/80 backdrop-blur-md overflow-y-auto">
             <motion.div 
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-slate-900 border border-slate-800 rounded-[2.5rem] p-8 max-w-sm w-full shadow-2xl space-y-8 overflow-hidden relative"
+              className="bg-slate-900 border border-slate-800 rounded-[2.5rem] p-8 max-w-sm w-full shadow-2xl space-y-8 relative my-auto"
             >
               <div className="absolute top-0 right-0 p-8 opacity-5">
                 <Settings className="w-32 h-32 text-indigo-500" />
