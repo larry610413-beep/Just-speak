@@ -574,13 +574,17 @@ export default function App() {
     rec.onresult = (event: any) => {
       let finalText = '';
       let interimText = '';
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const r = event.results[i];
-        if (r.isFinal) finalText += r[0].transcript;
-        else interimText += r[0].transcript;
+      // Read ALL results each time (not just from resultIndex) - avoids Android accumulation bug
+      for (let i = 0; i < event.results.length; i++) {
+        if (event.results[i].isFinal) {
+          finalText += event.results[i][0].transcript;
+        } else {
+          interimText += event.results[i][0].transcript;
+        }
       }
-      if (finalText) transcriptRef.current += finalText;
-      setInput((transcriptRef.current + interimText).trim());
+      // REPLACE (not append) - event.results already has the full cumulative transcript
+      transcriptRef.current = finalText.trim();
+      setInput((transcriptRef.current + (interimText ? ' ' + interimText.trim() : '')).trim());
 
       // Reset silence timer on every result
       if (silenceTimer) clearTimeout(silenceTimer);
