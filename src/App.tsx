@@ -947,7 +947,7 @@ export default function App() {
                       ))}
                     </select>
                   </div>
-                  <p className="text-[10px] text-slate-600">Select any English voice installed on your system. Choosing '(Online)' usually gives the best human-like results.</p>
+
                 </div>
 
                 {/* API Key Input */}
@@ -980,15 +980,7 @@ export default function App() {
                   <p className="text-[10px] text-slate-600">Stored locally on your S24 Ultra.</p>
                 </div>
 
-                <a 
-                  href="https://aistudio.google.com/app/plan_and_billing" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-2 w-full py-4 px-4 bg-slate-950 border border-slate-700 hover:border-indigo-500/50 text-slate-400 text-[10px] font-black uppercase tracking-widest rounded-3xl transition-all"
-                >
-                  Cloud Dashboard
-                  <Sparkles className="w-4 h-4 text-indigo-500" />
-                </a>
+
               </div>
 
               <button 
@@ -1339,7 +1331,19 @@ export default function App() {
                 <motion.button
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.9 }}
-                  onClick={() => { setHintEnabled(!hintEnabled); setSuggestion(''); }}
+                  onClick={() => {
+                    const newEnabled = !hintEnabled;
+                    setHintEnabled(newEnabled);
+                    setSuggestion('');
+                    if (newEnabled) {
+                      const lastAI = messages.filter(m => m.role === 'assistant' && !m.content.startsWith('[System]')).slice(-1)[0];
+                      if (lastAI) {
+                        const history = messages.map(m => ({ role: m.role === 'user' ? 'user' : 'model', parts: [{ text: m.content }] }));
+                        const currentKey = apiKey || localStorage.getItem('english_trainer_api_key') || '';
+                        generateSuggestion(history as any[], mode, currentKey).then(hint => setSuggestion(hint));
+                      }
+                    }
+                  }}
                   className={`flex items-center justify-center p-1.5 rounded-lg transition-all border shrink-0 ${
                       hintEnabled 
                       ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/30' 
