@@ -71,10 +71,10 @@ export async function* sendMessageStream(
     });
   } catch (error: any) {
     const errorMsg = error?.message?.toLowerCase() || '';
-    if (errorMsg.includes('quota') || errorMsg.includes('429')) {
-      console.warn("Quota reached for gemini-2.5-flash, falling back to gemini-1.5-flash...");
+    if (errorMsg.includes('quota') || errorMsg.includes('429') || errorMsg.includes('503') || errorMsg.includes('unavailable') || errorMsg.includes('high demand')) {
+      console.warn('Primary model unavailable, falling back to gemini-2.0-flash...');
       response = await ai.models.generateContentStream({
-        model: 'gemini-1.5-flash',
+        model: 'gemini-2.0-flash',
         contents: contents,
         config: {
           systemInstruction: currentInstruction,

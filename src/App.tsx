@@ -557,11 +557,14 @@ export default function App() {
 
     // Create a FRESH instance every time - avoids all stale handler / accumulation bugs
     const rec = new SpeechRecognition();
-    rec.continuous = false;
-    rec.interimResults = false;
+    rec.continuous = true;
+    rec.interimResults = true;
     rec.lang = 'en-US';
     recognitionRef.current = rec;
     transcriptRef.current = '';
+
+    let silenceTimer: ReturnType<typeof setTimeout> | null = null;
+    const SILENCE_MS = 2500; // stop after 2.5s of silence
 
     rec.onstart = () => {
       setIsListening(true);
@@ -569,12 +572,25 @@ export default function App() {
     };
 
     rec.onresult = (event: any) => {
-      // fresh instance: results[0] is always the one and only result
-      const transcript = event.results[0]?.[0]?.transcript?.trim() || '';
-      transcriptRef.current = transcript;
+      let finalText = '';
+      let interimText = '';
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const r = event.results[i];
+        if (r.isFinal) finalText += r[0].transcript;
+        else interimText += r[0].transcript;
+      }
+      if (finalText) transcriptRef.current += finalText;
+      setInput((transcriptRef.current + interimText).trim());
+
+      // Reset silence timer on every result
+      if (silenceTimer) clearTimeout(silenceTimer);
+      silenceTimer = setTimeout(() => {
+        try { rec.stop(); } catch (e) {}
+      }, SILENCE_MS);
     };
 
     rec.onerror = (event: any) => {
+      if (silenceTimer) clearTimeout(silenceTimer);
       if (event.error === 'aborted' || event.error === 'no-speech') return;
       setIsListening(false);
       if (event.error === 'not-allowed') {
@@ -585,10 +601,10 @@ export default function App() {
     };
 
     rec.onend = () => {
+      if (silenceTimer) clearTimeout(silenceTimer);
       setIsListening(false);
       const captured = transcriptRef.current.trim();
       if (captured) {
-        // Auto-send directly to chat - no need to press send button
         sendFn(captured);
         transcriptRef.current = '';
       }
@@ -721,24 +737,27 @@ export default function App() {
       let errorMessage = 'AI connection lost. Please try again.';
       
       try {
-        const errorText = error?.message || '';
-        if (errorText.includes('{')) {
-          const jsonStart = errorText.indexOf('{');
-          const jsonStr = errorText.substring(jsonStart);
-          const parsed = JSON.parse(jsonStr);
-          errorMessage = parsed?.error?.message || parsed?.message || 'API connection error';
+        const rawMsg = error?.message || error?.toString() || '';
+        // Try to extract JSON error message
+        const jsonMatch = rawMsg.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          errorMessage = parsed?.error?.message || parsed?.message || rawMsg;
         } else {
-          errorMessage = errorText;
+          errorMessage = rawMsg || errorMessage;
         }
       } catch (e) {
-        errorMessage = 'Could not parse AI response. Check your connection.';
+        errorMessage = error?.message || 'Could not connect to AI. Check your connection.';
       }
 
-      // Translate common API errors to English
-      if (errorMessage.toLowerCase().includes('api key not valid')) {
-        errorMessage = 'Initializing AI key. Please refresh or wait a moment.';
-      } else if (errorMessage.toLowerCase().includes('quota')) {
-        errorMessage = 'System is busy (Quota reached). Please wait a minute.';
+      // Map common API errors to clean messages
+      const lower = errorMessage.toLowerCase();
+      if (lower.includes('api key not valid') || lower.includes('api_key_invalid')) {
+        errorMessage = 'Invalid API key. Go to Settings to fix.';
+      } else if (lower.includes('quota') || lower.includes('rate limit')) {
+        errorMessage = 'API quota reached. Please wait a minute.';
+      } else if (lower.includes('503') || lower.includes('unavailable') || lower.includes('high demand')) {
+        errorMessage = 'Server is busy right now. Please try again in a moment.';
       }
 
       setMessages((prev) =>
@@ -1282,22 +1301,22 @@ export default function App() {
               </form>
             </div>
 
-            <div className="flex items-center justify-between w-full relative h-[48px] md:h-[52px]">
+            <div className="flex items-start justify-between w-full relative">
               {/* Suggestion Box on the Left */}
-              <div className="flex-1 h-full flex items-center overflow-hidden mr-3">
+              <div className="flex-1 flex items-start mr-3">
                 <AnimatePresence>
                   {suggestion && (
                     <motion.div 
                       initial={{ opacity: 0, x: -10 }}
                       animate={{ opacity: 1, x: 0 }}
                       exit={{ opacity: 0, x: -10 }}
-                      className="flex-1 text-left items-center px-4 py-2 bg-indigo-500/5 border border-indigo-500/10 text-indigo-300 rounded-xl shadow-inner cursor-pointer hover:bg-indigo-500/20 transition-all overflow-hidden"
+                      className="flex-1 text-left px-4 py-2.5 bg-indigo-500/5 border border-indigo-500/10 text-indigo-300 rounded-xl shadow-inner cursor-pointer hover:bg-indigo-500/20 transition-all"
                       onClick={() => {
                           setInput(suggestion);
                           setSuggestion('');
                       }}
                     >
-                      <p className="text-[10px] font-semibold tracking-tight whitespace-nowrap overflow-hidden text-ellipsis opacity-80">{suggestion}</p>
+                      <p className="text-xs font-semibold tracking-tight leading-snug opacity-90">{suggestion}</p>
                     </motion.div>
                   )}
                 </AnimatePresence>
