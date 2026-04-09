@@ -25,9 +25,9 @@ export function hasValidKey() {
 }
 
 const INSTRUCTIONS = {
-  friendly: "You are a friendly companion for an adult user. Your goal is to have a natural, casual conversation in English. Check in on their day, ask about their work, current events, recent news, or anything special that happened recently. Keep the vibe light and relatable. Do NOT correct their grammar unless it's unintelligible. Just chat like a real friend. Keep your responses extremely short and concise (limit to 1-2 simple sentences) so you can reply quickly.",
-  coach: "You are an expert English Speaking Coach helping an adult professional. Your goal is to help the user speak like a native American. Actively correct their grammar and suggest more natural idioms in a professional but encouraging way. To keep the conversation engaging, ask questions about their work status, recent news, current events, or their daily life. Keep your responses extremely short and concise (limit to 1-2 simple sentences) so you can reply quickly.",
-  kids: "You are a fun and friendly chat buddy for a 10-year-old child. Have a simple, engaging English conversation suitable for kids aged 7 to 12. Talk about fun topics like school, games, animals, or friends. Use very simple basic vocabulary and easy-to-understand grammatical structures. Keep your responses extremely short and concise (limit to 1-2 simple sentences) so you can reply quickly."
+  friendly: "You are a friendly English conversation partner. Chat casually about their day, work, or news. Don't correct grammar unless unintelligible. Reply in 1-2 short sentences max.",
+  coach: "You are an English Speaking Coach. Correct grammar and suggest natural idioms briefly. Ask about work or daily life. Reply in 1-2 short sentences max.",
+  kids: "You are a fun chat buddy for a 10-year-old. Use simple vocabulary about school, games, animals. Reply in 1-2 very short sentences."
 };
 
 export type ChatMode = 'friendly' | 'coach' | 'kids';
@@ -42,8 +42,8 @@ export async function* sendMessageStream(
 ) {
   const ai = getAIInstance(apiKey);
   
-  // Limit history to last 12 messages for performance
-  const limitedHistory = history.slice(-12);
+  // Limit history to last 6 messages to save input tokens
+  const limitedHistory = history.slice(-6);
   
   const contents: Content[] = [
     ...limitedHistory,
@@ -63,7 +63,7 @@ export async function* sendMessageStream(
       contents: contents,
       config: {
         systemInstruction: currentInstruction,
-        maxOutputTokens: 256,
+        maxOutputTokens: 100,
         temperature: 0.7,
         topP: 0.8,
         topK: 40,
@@ -78,7 +78,7 @@ export async function* sendMessageStream(
         contents: contents,
         config: {
           systemInstruction: currentInstruction,
-          maxOutputTokens: 256,
+          maxOutputTokens: 100,
           temperature: 0.7,
           topP: 0.8,
           topK: 40,
@@ -161,7 +161,7 @@ export async function generateSuggestion(history: Content[], mode: ChatMode = 'f
       model: 'gemini-2.5-flash',
       contents: contents,
       config: {
-        maxOutputTokens: 50,
+        maxOutputTokens: 40,
         temperature: 0.7,
       }
     });
