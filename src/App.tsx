@@ -66,6 +66,8 @@ export default function App() {
   const audioCacheRef = useRef<Map<string, { data: string, mimeType: string }>>(new Map());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
+  const keepListeningRef = useRef(false);
+  const sendTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const getAudioCtx = () => {
     if (!audioCtxRef.current) {
@@ -540,95 +542,106 @@ export default function App() {
     }
   };
 
+  const SEND_DELAY_MS = 4000; // 4秒靜默後自動送出
+
   const startListening = (sendFn: (text: string) => void) => {
     if (isLoading || isSpeaking) return;
-
-    if ('vibrate' in navigator) navigator.vibrate(50);
-
-    // Stop previous session cleanly
-    if (recognitionRef.current) {
-      try { recognitionRef.current.abort(); } catch (e) {}
-    }
-
     if (!SpeechRecognition) {
       setHasError('Speech recognition not supported in this browser.');
       return;
     }
+    if ('vibrate' in navigator) navigator.vibrate(50);
 
-    // Create a FRESH instance every time - avoids all stale handler / accumulation bugs
-    const rec = new SpeechRecognition();
-    rec.continuous = true;
-    rec.interimResults = true;
-    rec.lang = 'en-US';
-    recognitionRef.current = rec;
+    keepListeningRef.current = true;
     transcriptRef.current = '';
+    setInput('');
 
-    let silenceTimer: ReturnType<typeof setTimeout> | null = null;
-    const SILENCE_MS = 2500; // stop after 2.5s of silence
+    const launchSession = () => {
+      if (!keepListeningRef.current) return;
 
-    rec.onstart = () => {
-      setIsListening(true);
-      setInput('');
-    };
+      if (recognitionRef.current) {
+        try { recognitionRef.current.abort(); } catch (e) {}
+      }
 
-    rec.onresult = (event: any) => {
-      let finalText = '';
-      let interimText = '';
-      // Read ALL results each time (not just from resultIndex) - avoids Android accumulation bug
-      for (let i = 0; i < event.results.length; i++) {
-        if (event.results[i].isFinal) {
-          finalText += event.results[i][0].transcript;
-        } else {
-          interimText += event.results[i][0].transcript;
+      const rec = new SpeechRecognition();
+      rec.continuous = false;
+      rec.interimResults = false;
+      rec.lang = 'en-US';
+      recognitionRef.current = rec;
+
+      rec.onstart = () => setIsListening(true);
+
+      rec.onresult = (event: any) => {
+        const text = event.results[0]?.[0]?.transcript?.trim() || '';
+        if (text) {
+          transcriptRef.current += (transcriptRef.current ? ' ' : '') + text;
+          setInput(transcriptRef.current);
+          // Reset 4s auto-send timer every time new speech arrives
+          if (sendTimerRef.current) clearTimeout(sendTimerRef.current);
+          sendTimerRef.current = setTimeout(() => {
+            keepListeningRef.current = false;
+            setIsListening(false);
+            try { recognitionRef.current?.abort(); } catch (e) {}
+            const finalText = transcriptRef.current.trim();
+            if (finalText) {
+              sendFn(finalText);
+              transcriptRef.current = '';
+              setInput('');
+            }
+          }, SEND_DELAY_MS);
         }
-      }
-      // REPLACE (not append) - event.results already has the full cumulative transcript
-      transcriptRef.current = finalText.trim();
-      setInput((transcriptRef.current + (interimText ? ' ' + interimText.trim() : '')).trim());
+      };
 
-      // Reset silence timer on every result
-      if (silenceTimer) clearTimeout(silenceTimer);
-      silenceTimer = setTimeout(() => {
-        try { rec.stop(); } catch (e) {}
-      }, SILENCE_MS);
+      rec.onerror = (event: any) => {
+        if (event.error === 'aborted') return;
+        if (event.error === 'no-speech') return; // will restart in onend
+        keepListeningRef.current = false;
+        setIsListening(false);
+        if (sendTimerRef.current) clearTimeout(sendTimerRef.current);
+        if (event.error === 'not-allowed') {
+          setHasError('Microphone access denied. Allow microphone in browser settings.');
+        } else {
+          setHasError(`Mic error: ${event.error}`);
+        }
+      };
+
+      rec.onend = () => {
+        if (keepListeningRef.current) {
+          // Still listening: restart session to keep capturing
+          setTimeout(launchSession, 80);
+        } else {
+          setIsListening(false);
+        }
+      };
+
+      try {
+        rec.start();
+      } catch (e: any) {
+        keepListeningRef.current = false;
+        setIsListening(false);
+        setHasError(`Could not start mic: ${e.message}`);
+      }
     };
 
-    rec.onerror = (event: any) => {
-      if (silenceTimer) clearTimeout(silenceTimer);
-      if (event.error === 'aborted' || event.error === 'no-speech') return;
-      setIsListening(false);
-      if (event.error === 'not-allowed') {
-        setHasError('Microphone access denied. Allow microphone in browser settings.');
-      } else {
-        setHasError(`Mic error: ${event.error}`);
-      }
-    };
-
-    rec.onend = () => {
-      if (silenceTimer) clearTimeout(silenceTimer);
-      setIsListening(false);
-      const captured = transcriptRef.current.trim();
-      if (captured) {
-        sendFn(captured);
-        transcriptRef.current = '';
-      }
-    };
-
-    try {
-      rec.start();
-    } catch (e: any) {
-      setHasError(`Could not start mic: ${e.message}`);
-      setIsListening(false);
-    }
+    launchSession();
   };
 
   const stopListening = () => {
-    if (recognitionRef.current && isListening) {
-      if ('vibrate' in navigator) navigator.vibrate([30, 30]);
-      try { recognitionRef.current.stop(); } catch (e) {}
-      // onend will fire automatically and call sendFn
+    keepListeningRef.current = false;
+    if (sendTimerRef.current) clearTimeout(sendTimerRef.current);
+    if ('vibrate' in navigator) navigator.vibrate([30, 30]);
+    try { recognitionRef.current?.stop(); } catch (e) {}
+    setIsListening(false);
+    // Manually stopping → send immediately if there's text
+    const text = transcriptRef.current.trim();
+    if (text) {
+      handleSend(text);
+      transcriptRef.current = '';
+      setInput('');
     }
   };
+
+
 
 
   const handleSend = async (text: string) => {
