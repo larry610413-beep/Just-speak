@@ -9,6 +9,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { sendMessageStream, generateSpeech, ChatMode, generateSuggestion } from './gemini';
 import { Settings, Shield, Coffee, Key, Smile, Lightbulb, Database } from 'lucide-react';
 import { hasValidKey } from './gemini';
+import { getCachedAudio, setCachedAudio } from './ttsCache';
 
 interface Message {
   id: string;
@@ -39,6 +40,9 @@ export default function App() {
   const [isIframe, setIsIframe] = useState(false);
   const [mode, setMode] = useState<ChatMode>('friendly');
   const [isGeneratingSpeech, setIsGeneratingSpeech] = useState(false);
+  const [autoSpeak, setAutoSpeak] = useState(() => localStorage.getItem('english_trainer_auto_speak') === 'true');
+  const autoSpeakRef = useRef(autoSpeak);
+  useEffect(() => { autoSpeakRef.current = autoSpeak; localStorage.setItem('english_trainer_auto_speak', String(autoSpeak)); }, [autoSpeak]);
   const [showSettings, setShowSettings] = useState(false);
   const [suggestion, setSuggestion] = useState('');
   const [hintEnabled, setHintEnabled] = useState(false);
@@ -393,27 +397,38 @@ export default function App() {
   const playResponse = (item: { text: string; audioPromise: Promise<{ data: string, mimeType: string } | null> | null }) => {
     return new Promise<void>(async (resolve) => {
       if (selectedVoiceURI === 'GEMINI_NATIVE') {
-        // 先檢查快取：如果之前已經產生過這段語音，直接播放，不耗 API
-        const cached = audioCacheRef.current.get(item.text);
-        if (cached) {
-          await playGeminiFromData(cached);
+        // 1. 先查 in-memory 快取（最快）
+        const memCached = audioCacheRef.current.get(item.text);
+        if (memCached) {
+          await playGeminiFromData(memCached);
           resolve();
           return;
         }
 
+        // 2. 查 IndexedDB 持久快取（關掉 app 重開也有效）
+        const dbCached = await getCachedAudio(item.text);
+        if (dbCached) {
+          audioCacheRef.current.set(item.text, dbCached); // 也放進 memory 加速
+          await playGeminiFromData(dbCached);
+          resolve();
+          return;
+        }
+
+        // 3. 都沒有才打 API
         const currentKey = apiKey || localStorage.getItem('english_trainer_api_key') || '';
         setIsGeneratingSpeech(true);
         const geminiAudioResponse = item.audioPromise ? await item.audioPromise : await generateSpeech(item.text, currentKey);
         
         if (geminiAudioResponse) {
-          // 快取起來，下次按喇叭直接用
+          // 同時存 memory + IndexedDB
           audioCacheRef.current.set(item.text, geminiAudioResponse);
+          setCachedAudio(item.text, geminiAudioResponse); // async，不 await，不阻塞播放
           await playGeminiFromData(geminiAudioResponse);
           resolve();
           return;
         }
         
-        // Gemini 失敗時（可能是 API Key 無效或網路逾時）
+        // Gemini 失敗時
         setHasError("Gemini Voice failed to return audio (Check API Key/Quota)");
         setIsGeneratingSpeech(false);
         resolve();
@@ -728,13 +743,13 @@ export default function App() {
       
       // Gemini 雲端語音：整段回覆一次送出，聲音 100% 統一
       if (selectedVoiceURI === 'GEMINI_NATIVE') {
-        if (fullResponse.trim().length > 0) {
+        if (fullResponse.trim().length > 0 && autoSpeakRef.current) {
           queueAudio(fullResponse.trim());
         }
       } else {
         // 非 Gemini 模式：送出最後剩餘的文字片段
         const finalSentence = fullResponse.substring(lastProcessedIndex).trim();
-        if (finalSentence && finalSentence.length > 0) {
+        if (finalSentence && finalSentence.length > 0 && autoSpeakRef.current) {
           queueAudio(finalSentence);
         }
       }
@@ -858,6 +873,17 @@ export default function App() {
             title="Settings"
           >
             <Settings className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => setAutoSpeak(v => !v)}
+            className={`w-[35px] h-[35px] flex items-center justify-center transition-all rounded-xl border ${
+              autoSpeak
+                ? 'bg-indigo-500/20 text-indigo-400 border-indigo-500/40'
+                : 'text-slate-600 border-transparent hover:text-slate-400 hover:bg-slate-800'
+            }`}
+            title={autoSpeak ? '自動播放：開 (點擊關閉省API)' : '自動播放：關 (點擊開啟)'}
+          >
+            {autoSpeak ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
           </button>
           {messages.filter(m => m.role === 'assistant' && !m.content.startsWith('[System]')).length > 0 && (
             <button
