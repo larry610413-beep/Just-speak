@@ -113,7 +113,7 @@ export async function generateSpeech(text: string, apiKey?: string): Promise<{ d
           responseModalities: ['AUDIO'],
           speechConfig: {
             voiceConfig: {
-              prebuiltVoiceConfig: { voiceName: 'Charon' }
+              prebuiltVoiceConfig: { voiceName: 'Zephyr' }
             }
           }
         }
