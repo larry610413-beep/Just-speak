@@ -942,7 +942,7 @@ export default function App() {
                     <span className="text-lg">✨</span>
                     <div>
                       <p className="text-sm font-bold text-slate-100">Gemini 雲端真人語音</p>
-                      <p className="text-[10px] text-slate-500">Zephyr · AI Neural Voice</p>
+                      <p className="text-[10px] text-slate-500">Kore · AI Neural Voice</p>
                     </div>
                     <div className="ml-auto w-2.5 h-2.5 rounded-full bg-indigo-400 shadow-lg shadow-indigo-400/50 shrink-0" />
                   </div>
