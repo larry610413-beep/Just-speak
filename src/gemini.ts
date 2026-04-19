@@ -108,12 +108,12 @@ export async function generateSpeech(text: string, apiKey?: string): Promise<{ d
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        contents: [{ role: 'user', parts: [{ text: `Say ONLY this text aloud, exactly as it is written: "${text}"` }] }],
+        contents: [{ role: 'user', parts: [{ text } ] }],
         generationConfig: {
           responseModalities: ['AUDIO'],
           speechConfig: {
             voiceConfig: {
-              prebuiltVoiceConfig: { voiceName: 'Aoede' }
+              prebuiltVoiceConfig: { voiceName: 'Charon' }
             }
           }
         }

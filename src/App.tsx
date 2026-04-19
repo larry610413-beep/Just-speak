@@ -57,7 +57,7 @@ export default function App() {
     const saved = localStorage.getItem('english_trainer_api_key');
     return (saved && saved.trim().length > 10) ? saved : '';
   });
-  const [selectedVoiceURI, setSelectedVoiceURI] = useState(() => localStorage.getItem('english_trainer_voice_uri') || '');
+  const [selectedVoiceURI, setSelectedVoiceURI] = useState('GEMINI_NATIVE');
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
   const transcriptRef = useRef('');
   const recognitionRef = useRef<any>(null);
@@ -938,52 +938,14 @@ export default function App() {
                     <Volume2 className="w-4 h-4" />
                     <p className="text-[10px] font-black uppercase tracking-widest">Voice Engine</p>
                   </div>
-                  <div className="flex flex-col gap-3">
-                    <select 
-                      value={selectedVoiceURI} 
-                      onChange={async (e) => {
-                        const uri = e.target.value;
-                        setSelectedVoiceURI(uri);
-                        localStorage.setItem('english_trainer_voice_uri', uri);
-                        
-                        // Preview logic
-                        if (uri === 'GEMINI_NATIVE') {
-                           const currentKey = apiKey || localStorage.getItem('english_trainer_api_key') || '';
-                           if (!currentKey) {
-                             setHasError("Please set API key first for Gemini Voice.");
-                             return;
-                           }
-                           
-                           await playGeminiAudio("Hi, nice to meet you.", currentKey, () => {}, () => {
-                             setHasError("無法解析 Gemini 語音，可能您的金鑰沒有權限。");
-                           });
-                           
-                        } else {
-                          const synth = window.speechSynthesis;
-                          synth.cancel();
-                          const utterance = new SpeechSynthesisUtterance("Hi, nice to meet you.");
-                          if (uri === 'SYSTEM_DEFAULT') {
-                            utterance.lang = 'en-US';
-                          } else {
-                            const v = availableVoices.find(v => v.voiceURI === uri);
-                            if (v) utterance.voice = v;
-                          }
-                          synth.speak(utterance);
-                        }
-                      }}
-                      className="w-full bg-slate-950 border border-slate-700 text-slate-100 px-5 py-4 rounded-3xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-sm transition-all appearance-none"
-                    >
-                      <option value="">Auto Select Best Voice</option>
-                      <option value="SYSTEM_DEFAULT">⭐ 手機系統預設 (需在手機設定改為主引擎)</option>
-                      <option value="GEMINI_NATIVE">✨【推薦】Gemini 雲端真人語音 (需付費方案)</option>
-                      {availableVoices.map((v) => (
-                        <option key={v.voiceURI} value={v.voiceURI}>
-                          {v.name} {v.localService ? '(Device)' : '(Online)'}
-                        </option>
-                      ))}
-                    </select>
+                  <div className="flex items-center gap-3 bg-slate-950 border border-indigo-500/40 px-5 py-4 rounded-3xl">
+                    <span className="text-lg">✨</span>
+                    <div>
+                      <p className="text-sm font-bold text-slate-100">Gemini 雲端真人語音</p>
+                      <p className="text-[10px] text-slate-500">Charon · AI Neural Voice</p>
+                    </div>
+                    <div className="ml-auto w-2.5 h-2.5 rounded-full bg-indigo-400 shadow-lg shadow-indigo-400/50 shrink-0" />
                   </div>
-
                 </div>
 
                 {/* API Key Input */}
